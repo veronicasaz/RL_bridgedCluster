@@ -1,0 +1,76 @@
+{
+    "Integration":
+    {
+        "savefile": "./Testing_results/",
+	"savestate": true,
+        "units": "si",
+        "n_bodies": 2, 
+        "bridged": false,
+        "max_steps": 100,
+        "state": "cart",
+        "state_options_info": ["norm", "cart", "dist"],
+        "seed": "None",
+        "plot": false,
+        "ranges": {
+	  "m": [1e-4, 1e-3],
+	  "a": [2, 4], 
+	  "e": [0.8, 0.9], 
+	  "i": [0.0, 10],
+	  "omega": [0, 360] ,
+	  "Omega": [0, 360],
+	  "TA": [0, 360]
+	   },
+	  "ranges_coords": {
+		  "x1": [5.0, 20.0],
+		  "y1": [0.0, 10.0],
+		  "x2": [0.0, -10.0],
+		  "y2": [5.0, 20.0]
+	       },
+	"Hermite":
+		{
+		"check_step": 1e-1,
+		"action": "range",
+		"number_actions": 6,
+		"range": [1e-4, 1e-1]
+		},
+	"Ph4":
+		{
+		"check_step": 1e-1,
+		"action": "range",
+		"number_actions": 6,
+		"range": [1e-4, 1e-1]
+		},
+	"Huayno":
+		{
+		"check_step": 1e-1,
+		"action": "range",
+		"number_actions": 6,
+		"range": [1e-5, 1e-1]
+		},
+	"Symple":
+		{
+		"check_step": 1e-1,
+		"action": "range",
+		"number_actions": 6,
+		"range": [5e-5, 1e-1]
+		}
+     },
+     "Training":
+    {
+    	"savemodel": "./Training_Results/",
+    	"display": true,
+ 	"reward_f": 2,
+        "weights": [10.0, 50.0, 4.0],
+        "max_iter": 6000,
+        "hidden_layers": 3,
+        "neurons": 100,
+        "lr": 5e-4,
+        "batch_size": 128,
+        "gamma": 0.99,
+        "eps_start": 0.9,
+        "eps_end": 0.05,
+        "eps_decay": 1000,
+        "tau": 0.005
+    }
+}
+
