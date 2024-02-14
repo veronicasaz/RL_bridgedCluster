@@ -15,6 +15,8 @@ import time
 from setuptools import setup
 import json
 
+from pyDOE import lhs
+
 from amuse.units import units, constants, nbody_system
 from amuse.community.hermite.interface import Hermite
 from amuse.community.ph4.interface import ph4
@@ -22,7 +24,9 @@ from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
 from amuse.lab import Particles
 from amuse.couple import bridge
+from amuse.ext.orbital_elements import  generate_binaries
 
+from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 
 def plot_state(bodies):
     v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
@@ -53,7 +57,7 @@ def orbital_period(a, Mtot, G = constants.G):
     """
     return 2*np.pi*(a**3/(G*Mtot)).sqrt()
 
-class TwoBody_env(gym.Env):
+class ThreeBody_env(gym.Env):
     def __init__(self, render_mode = None, integrator = 'Hermite', subfolder = '', suffix = ''):
         """
         TwoBody_env: environment to integrate a system of two bodies being bridged
@@ -66,7 +70,7 @@ class TwoBody_env(gym.Env):
         """
 
         # Choose observation space size
-        self.settings = load_json("./settings_integration_2Body.json")
+        self.settings = load_json("./settings_integration_3Body.json")
         self.n_bodies = self.settings['Integration']['n_bodies']
         self.size = 4*self.n_bodies 
         self.observation_space = gym.spaces.Box(low=np.array([-np.inf]*self.size), \
@@ -97,9 +101,6 @@ class TwoBody_env(gym.Env):
     def _initial_conditions(self):
         """
         _initial_conditions: choose initial conditions to be used in the problem
-        The options are:
-            - binary: system of two stars
-            - triple: system of three stars
 
         OUTPUTS:
             bodies: particle set with the bodies in the system including their masses, positions 
@@ -126,10 +127,10 @@ class TwoBody_env(gym.Env):
             bodies.mass = (1.0, 1.0, 1.0) | units.MSun # equal mass
             bodies[2].position = (K[2], K[3], 0.0) | units.au
         
+        bodies = self._add_bodies_inner(bodies, [0, len(bodies)])
+
         self.converter = nbody_system.nbody_to_si(bodies.mass.sum(), 1 | units.au)
-        
         bodies.move_to_center()
-        print(bodies)
 
         # Plot initial state
         if self.settings['Integration']['plot'] == True:
@@ -139,9 +140,6 @@ class TwoBody_env(gym.Env):
     def _initial_conditions_bridge(self):
         """
         _initial_conditions_bridge: choose initial conditions to be used in the problem and divide them for the bridge
-        The options are:
-            - binary: system of two stars
-            - triple: system of three stars
 
         OUTPUTS:
             bodies: particle set with the bodies in the system including their masses, positions 
@@ -170,9 +168,12 @@ class TwoBody_env(gym.Env):
             bodies_global.mass = (1.0, 1.0) | units.MSun # equal mass
             bodies_local.mass = (1.0) | units.MSun # equal mass
             bodies_global[1].position = (K[2], K[3], 0.0) | units.au
-        
+        bodies_local = self._add_bodies_inner(bodies_local, [0, 1])
+        bodies_global = self._add_bodies_inner(bodies_global, [1, self.n_bodies])
+
         self.converter = nbody_system.nbody_to_si(bodies_global.mass.sum() + bodies_local.mass.sum(), 1 | units.au)
         
+        # bodies_global.move_to_center()
         print(bodies_global)
         print(bodies_local)
 
@@ -181,7 +182,37 @@ class TwoBody_env(gym.Env):
         #     plot_state(bodies) #TODO: allow plotting
         return bodies_global, bodies_local
     
+    def _add_bodies_inner(self, bodies, index_bodies):
+        ranges = self.settings['Integration']['ranges_inner']
+        ranges_np = np.array(list(ranges.values()))
+        for bod in range(index_bodies[0], index_bodies[1]):
+            bodies_inner = self.settings['Integration']['n_bodies_inner'][bod]
+            if bodies_inner > 0:
+                if self.seed_initial != "None":
+                    np.random.seed(seed = self.seed_initial)
+                K = lhs(len(ranges), samples = bodies_inner) * (ranges_np[:, 1]- ranges_np[:, 0]) + ranges_np[:, 0] 
 
+                for i in range(bodies_inner):
+                    sun, particle = generate_binaries(
+                        bodies[bod].mass,
+                        K[i, 0] | units.MSun,
+                        K[i, 1] | units.au,
+                        eccentricity = K[i, 2],
+                        inclination = K[i, 3],
+                        longitude_of_the_ascending_node = K[i, 5],
+                        argument_of_periapsis = K[i, 4],
+                        true_anomaly= K[i, 5],
+                        G = constants.G)
+                    particle.name = "Particle_%i"%i
+
+                    # position around the main body
+                    particle.position += bodies[bod].position
+                    particle.velocity += bodies[bod].velocity
+
+                    bodies.add_particles(particle)
+        
+        return bodies
+    
     def units(self):
         # Choose set of units for the problem
         if self.settings['Integration']['units'] == 'si':
@@ -217,7 +248,7 @@ class TwoBody_env(gym.Env):
             bodies.add_particles(particles_vector[i])
         return bodies
     
-    def _get_info(self, particles, initial = False):
+    def _get_info(self, particles, initial = False): # change to include multiple energies
         """
         _get_info: get energy error, angular momentum error at current state
         OUTPUTS:
@@ -233,7 +264,7 @@ class TwoBody_env(gym.Env):
             Delta_L = (L - self.L_0) / self.L_0
             return Delta_E, Delta_L
 
-    def _get_state(self, particles, E): 
+    def _get_state(self, particles, E):  # TODO: change to include all particles?
         """
         _get_state: create the state vector
         Options:
@@ -362,6 +393,9 @@ class TwoBody_env(gym.Env):
         else:
             self.typereward = typereward # choice of reward function
 
+        # Select units
+        self.units()
+
         if self.bridged == True:
             # Same time step for the integrators and the bridge
             self.particles_global, self.particles_local = self._initial_conditions_bridge()
@@ -375,7 +409,7 @@ class TwoBody_env(gym.Env):
             self.grav_bridge = bridge.Bridge(use_threading=False)
             self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
             self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
-            # self.grav_bridge.timestep = self.actions[0]
+            # self.grav_bridge.timestep = self.actions[0
             self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[0], bridge = True)
 
             self.channel = [self.grav_global.particles.new_channel_to(self.particles_global), \
@@ -391,8 +425,7 @@ class TwoBody_env(gym.Env):
 
             particles_joined = self.particles
 
-        # Select units
-        self.units()
+        self.n_bodies_total = len(particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
         self.E_0, self.L_0 = self._get_info(particles_joined, initial = True)
@@ -417,7 +450,7 @@ class TwoBody_env(gym.Env):
         if self.save_state_to_file == True:
             if steps == None:
                 steps = self.settings['Integration']['max_steps']
-            self.state = np.zeros((steps, self.n_bodies, 8)) # action, mass, rx3, vx3, 
+            self.state = np.zeros((steps, self.n_bodies_total, 8)) # action, mass, rx3, vx3, 
             self.cons = np.zeros((steps, 5)) # action, E, Lx3, 
             self.comp_time = np.zeros(self.settings['Integration']['max_steps']) # computation time
             self._savestate(0, 0, particles_joined, 0.0, 0.0) # save initial state
@@ -486,6 +519,7 @@ class TwoBody_env(gym.Env):
 
         # Apply action
         if self.bridged == True:
+            # self.grav_bridge.timestep = self.actions[0]
             self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[action], bridge = True)
         else:
             self.gravity = self.apply_action(self.gravity, self.actions[action])
@@ -500,7 +534,6 @@ class TwoBody_env(gym.Env):
             T = time.time() - t0_step
 
             for chan in range(len(self.channel)):
-                print(self.grav_global.particles, self.particles)
                 self.channel[chan].copy()
 
             particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
@@ -508,7 +541,7 @@ class TwoBody_env(gym.Env):
         else:
             self.gravity.evolve_model(t)
             T = time.time() - t0_step
-            self.channel[0].copy() # only 1 channel
+            self.channel[0].copy()
 
             particles_joined = self.particles
             
@@ -653,6 +686,5 @@ class TwoBody_env(gym.Env):
         plt.grid()
         plt.legend()
         plt.show()
-
 
 

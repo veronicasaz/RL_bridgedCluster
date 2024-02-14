@@ -5,13 +5,20 @@
 	"savestate": true,
         "units": "si",
         "n_bodies": 3, 
+        "n_bodies_inner": [2, 0, 0],
         "bridged": false,
         "max_steps": 100,
         "state": "cart",
         "state_options_info": ["norm", "cart", "dist"],
         "seed": "None",
         "plot": false,
-        "ranges": {
+	 "ranges_coords": {
+		  "x1": [5.0, 20.0],
+		  "y1": [0.0, 10.0],
+		  "x2": [0.0, -10.0],
+		  "y2": [5.0, 20.0]
+	       },
+	  "ranges_inner": {
 	  "m": [1e-4, 1e-3],
 	  "a": [2, 4], 
 	  "e": [0.8, 0.9], 
@@ -20,12 +27,7 @@
 	  "Omega": [0, 360],
 	  "TA": [0, 360]
 	   },
-	  "ranges_coords": {
-		  "x1": [5.0, 20.0],
-		  "y1": [0.0, 10.0],
-		  "x2": [0.0, -10.0],
-		  "y2": [5.0, 20.0]
-	       },
+	 
 	"Hermite":
 		{
 		"check_step": 1e-1,
