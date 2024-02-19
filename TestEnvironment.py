@@ -11,83 +11,145 @@ import matplotlib
 from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
 from PlotsFunctions import run_trajectory, load_state_files, \
-                            plot_planets_trajectory
+                            plot_planets_trajectory, plot_evolution
 
-def plot_trajs(STATES, CONS, Titles):
+def calculate_errors(cases, steps, namefile):
+    state = list()
+    cons = list()
+    tcomp = list()
+    name = list()
+    for i in range(cases):
+        state_i, cons_i, tcomp_i = load_state_files(env, steps, namefile = namefile[i])
+        state.append(state_i)
+        cons.append(cons_i)
+        tcomp.append(tcomp_i)
+        name.append('Case_%i'%i)
 
+    # Calculate the energy errors
+    E_E = np.zeros((steps, cases))
+    E_M = np.zeros((steps, cases))
+    T_c = np.zeros((steps, cases))
+    for i in range(cases):
+        E_E[:, i] = abs(cons[i][:, 1]) # absolute relative energy error
+        E_M[:, i] = np.linalg.norm((cons[i][:, 2:] - cons[i][0, 2:]), axis = 1) # relative angular momentum error
+        T_c[:, i] = np.cumsum(tcomp[i]) # add individual computation times
+
+    return E_E, T_c
+
+def plot_trajs(STATES, CONS, Titles, filenames, save_path = None):
     # Setup plot
     label_size = 18
     fig = plt.figure(figsize = (10,10))
-    gs1 = matplotlib.gridspec.GridSpec(2, len(STATES), width_ratios=[1]*len(STATES), 
+    gs1 = matplotlib.gridspec.GridSpec(3, len(STATES), width_ratios=[1]*len(STATES), 
                                     left=0.08, wspace=0.2, hspace = 0.5, right = 0.93,
-                                    top = 0.97, bottom = 0.01)
+                                    top = 0.97, bottom = 0.07)
     
     
-    # name_bodies = (np.arange(np.shape(STATES[[0]])[1])+1).astype(str)
-    name_bodies = ['1', '2', '3']
+    # Plot trajectories 2D
+    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
     legend = True
     for case in range(len(STATES)):
-        ax = fig.add_subplot(gs1[0, case])
+        ax1 = fig.add_subplot(gs1[0, case])
         if case > 0: 
             legend = False
-        plot_planets_trajectory(ax, STATES[case]/1.496e11, name_bodies, \
+        plot_planets_trajectory(ax1, STATES[case]/1.496e11, name_bodies, \
                             labelsize=label_size, steps = steps, legend_on = legend)
-        ax.set_title(Titles[case], fontsize = label_size + 2)
+        ax1.set_title(Titles[case], fontsize = label_size + 2)
+        ax1.set_xlabel('x (au)', fontsize = label_size)
+        ax1.set_ylabel('y (au)', fontsize = label_size)
 
+    # Plot energy error
+    linestyle = '-'
+    x_axis = np.arange(0, steps, 1)
+    Energy_error, T_comp = calculate_errors(len(STATES), steps, filenames)
+    print(np.shape(Energy_error), np.shape(T_comp))
+    ax2 = fig.add_subplot(gs1[1, :])
+    ax3 = fig.add_subplot(gs1[2, :])
+    for case in range(len(STATES)):
+        plot_evolution(ax2, x_axis, Energy_error[:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle)
+        plot_evolution(ax3, x_axis, T_comp[:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle)
+        ax2.set_xlabel('Step', fontsize = label_size)
+        ax3.set_xlabel('Step', fontsize = label_size)
+        ax2.set_ylabel('Energy Error', fontsize = label_size)
+        ax3.set_ylabel('Computation time (s)', fontsize = label_size)
+    
+    ax2.set_yscale('log')
+    ax3.set_yscale('log')
+
+    ax2.legend(fontsize = label_size -3)
+
+    plt.savefig(save_path + "state_bridgevsNobridge.png", dpi = 100)
     plt.show()
 
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 3 # number of the experiment to be run
     seed = 1
 
-    if experiment == 1: # run bridged vs not bridged for 2 particles
-        t_step = 1e-4
-        steps = 100
-
-        env = TwoBody_env()
-        env.settings['Integration']['n_bodies'] = 2 # overwrite to 3 bodies
-        env.subfolder = '1_runBridgedvsNobridge/'
-
+    def run_bridge_vs_no_bridge(env, seed, steps):
+        """
+        run_bridge_vs_no_bridge: run commands to run trajectories and save data
+        """
         env.bridged = True
-        env.reset(seed = seed, steps = steps)
+        env.integrator = 'Hermite'
         run_trajectory(seed = seed, action = 0, env = env,\
                                name_suffix = '_bridge', steps = steps)
         
         env.bridged = False
-        env.reset(seed = seed, steps = steps)
+        env.integrator = 'Hermite'
         run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_nobridge', steps = steps)
-
+                               name_suffix = '_nobridge_Hermite', steps = steps)
+        
+        env.bridged = False
+        env.integrator = 'Huayno'
+        run_trajectory(seed = seed, action = 0, env = env,\
+                               name_suffix = '_nobridge_Huayno', steps = steps)
     
-    if experiment == 2: # run bridged vs not bridged for 2 particles
-        t_step = 1e-4
-        steps = 100
+    def plot_bridge_vs_no_bridge(env, steps):
+        """
+        plot_bridge_vs_no_bridge: load files and call plot
+        """
+        state_bridge, cons_bridge, tcomp_bridge = load_state_files(env, steps, namefile = '_bridge')
+        state_nobridge_Hermite, cons_nobridge_Hermite, tcomp_nobridge_Hermite = load_state_files(env, steps, namefile = '_nobridge_Hermite')
+        state_nobridge_Huayno, cons_nobridge_Huayno, tcomp_nobridge_Huayno = load_state_files(env, steps, namefile = '_nobridge_Huayno')
+        
+        path_save = env.settings["Integration"]['savefile'] + env.subfolder
+        plot_trajs([state_nobridge_Hermite, state_nobridge_Huayno, state_bridge], [], ['Bridge', 'No bridge Hermite', 'No bridge Huayno'],\
+                    ['_bridge', '_nobridge_Hermite', '_nobridge_Huayno'], save_path = path_save)
+        
+    if experiment == 1: # run bridged vs not bridged for 2 particles
+        t_step = 1e-3
+        steps = 30
+
+        env = TwoBody_env()
+        env.n_bodies = 2 # overwrite to 3 bodies
+        env.subfolder = '1_runBridgedvsNobridge_2BP/'
+
+        run_bridge_vs_no_bridge(env, seed, steps)
+        plot_bridge_vs_no_bridge(env, steps)
+        
+    elif experiment == 2: # run bridged vs not bridged for 3 particles
+        t_step = 1e-3
+        steps = 30
+
+        env = TwoBody_env()
+        env.n_bodies = 3 # overwrite to 3 bodies
+        env.subfolder = '2_runBridgedvsNobridge_3BP/'
+
+        run_bridge_vs_no_bridge(env, seed, steps)
+        plot_bridge_vs_no_bridge(env, steps)
+    
+    elif experiment == 3: # run bridged vs not bridged for 3 particles with planets
+        t_step = 1e-3
+        steps = 30
 
         env = ThreeBody_env()
         env.settings['Integration']['n_bodies'] = 3 # overwrite to 3 bodies
-        env.subfolder = '1_runBridgedvsNobridge/'
+        env.subfolder = '3_runBridgedvsNobridge_planetary/'
 
-        env.bridged = True
-        env.reset(seed = seed, steps = steps)
-        run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_bridge', steps = steps)
-        
-        env.bridged = False
-        env.reset(seed = seed, steps = steps)
-        run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_nobridge', steps = steps)
-
-        STOP_HERE_FOR_NOW
-
-        
-     
-        
-        env.close()
-
-        # plot comparison
-        state_nobridge, cons_nobridge, tcomp_nobridge = load_state_files(env, steps, namefile = '_nobridge')
-        state_bridge, cons_bridge, tcomp_bridge = load_state_files(env, steps, namefile = '_bridge')
-        plot_trajs([state_nobridge, state_bridge], [], ['No bridge', 'Bridge'])
+        run_bridge_vs_no_bridge(env, seed, steps)
+        plot_bridge_vs_no_bridge(env, steps)
 
 
         
