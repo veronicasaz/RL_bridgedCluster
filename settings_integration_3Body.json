@@ -5,13 +5,16 @@
 	"savestate": true,
         "units": "si",
         "n_bodies": 3, 
-        "n_bodies_inner": [2, 0, 0],
+        "n_bodies_inner": [0, 0, 2],
         "bridged": false,
-        "max_steps": 100,
+        "max_steps": 200,
         "state": "cart",
         "state_options_info": ["norm", "cart", "dist"],
         "seed": "None",
         "plot": false,
+	"t_step_integr": 1e-3,
+	"t_step_bridge": [1e-4, 1e-1],
+	"number_actions": 6,
 	 "ranges_coords": {
 		  "x1": [5.0, 20.0],
 		  "y1": [0.0, 10.0],
@@ -19,7 +22,7 @@
 		  "y2": [5.0, 20.0]
 	       },
 	  "ranges_inner": {
-	  "m": [1e-4, 1e-3],
+	  "m": [1e-5, 1e-4],
 	  "a": [2, 4], 
 	  "e": [0.8, 0.9], 
 	  "i": [0.0, 10],

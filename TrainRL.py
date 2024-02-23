@@ -31,7 +31,7 @@ from TrainingFunctions import DQN, \
 
 
 # Environment
-env = gym.make('bridgedparticles:TwoBody-v0') # create the env once it's been registered
+env = gym.make('bridgedparticles:ThreeBody-v0') # create the env once it's been registered
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,7 +42,7 @@ if is_ipython:
     from IPython import display
 
 # settings = load_json("./settings_symple.json")
-settings = load_json("./settings_hermite.json")
+settings = load_json("./settings_integration_3Body.json")
 
 # TRAINING settings
 BATCH_SIZE = settings['Training']['batch_size'] # number of transitions sampled from the replay buffer

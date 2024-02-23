@@ -1,0 +1,3 @@
+from bridgedparticles.envs.Bridged2Body_env import TwoBody_env
+from bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
+

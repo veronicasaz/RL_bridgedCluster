@@ -26,7 +26,7 @@ from amuse.lab import Particles
 from amuse.couple import bridge
 from amuse.ext.orbital_elements import  generate_binaries
 
-from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
+# from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 
 def plot_state(bodies):
     v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
@@ -57,6 +57,7 @@ def orbital_period(a, Mtot, G = constants.G):
     """
     return 2*np.pi*(a**3/(G*Mtot)).sqrt()
 
+
 class ThreeBody_env(gym.Env):
     def __init__(self, render_mode = None, integrator = 'Hermite', subfolder = '', suffix = ''):
         """
@@ -82,9 +83,9 @@ class ThreeBody_env(gym.Env):
 
         # From a range of paramters
         if self.settings['Integration'][self.integrator]['action'] == 'range':
-            low = self.settings['Integration'][self.integrator]['range'][0]
-            high = self.settings['Integration'][self.integrator]['range'][-1]
-            n_actions = self.settings['Integration'][self.integrator]['number_actions']
+            low = self.settings['Integration']['t_step_bridge'][0]
+            high = self.settings['Integration']['t_step_bridge'][-1]
+            n_actions = self.settings['Integration']['number_actions']
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
@@ -95,9 +96,27 @@ class ThreeBody_env(gym.Env):
         self.bridged = self.settings['Integration']['bridged']
         self.W = self.settings['Training']['weights']
         self.seed_initial = self.settings['Integration']['seed']
+        self.t_step_integr = self.settings['Integration']['t_step_integr']
+        self.bodies_inner = self.settings['Integration']['n_bodies_inner']
+
         self.subfolder = subfolder # added subfolder where to save files
         self.suffix = suffix # added info for saving files
 
+    def _setup_initial_conds(self):
+        ranges = self.settings['Integration']['ranges_coords']
+        ranges_np = np.array(list(ranges.values()))
+        if self.seed_initial != "None":
+            np.random.seed(seed = self.seed_initial)
+        K = np.random.uniform(low = ranges_np[:, 0], high = ranges_np[:, 1])
+
+        r = np.array([[0, 0, 0],
+                    [K[0], K[1], 0],
+                    [K[2], K[3], 0.0]])
+        v = np.array([[0, 10.0, 0],
+                    [-10, 0, 0],
+                    [0, 0, 0.0]])
+        return r, v
+        
     def _initial_conditions(self):
         """
         _initial_conditions: choose initial conditions to be used in the problem
@@ -107,36 +126,35 @@ class ThreeBody_env(gym.Env):
                 and velocities
         """
         # Create initial position, mass, and velocity for the bodies
-        ranges = self.settings['Integration']['ranges_coords']
-        ranges_np = np.array(list(ranges.values()))
-        if self.seed_initial != "None":
-            np.random.seed(seed = self.seed_initial)
-        K = np.random.uniform(low = ranges_np[:, 0], high = ranges_np[:, 1])
-
+        r, v = self._setup_initial_conds()
+        
         bodies = Particles(self.n_bodies)
 
-        bodies[0].position = (0.0, 0.0, 0.0) | units.au
-        bodies[0].velocity = (0.0, 10.0, 0.0) | units.kms
-        bodies[1].position = (K[0], K[1], 0.0) | units.au
-        bodies[1].velocity = (-10.0, 0.0, 0.0) | units.kms
+        bodies[0].position = r[0] | units.au
+        bodies[0].velocity = v[0] | units.kms
+
+        bodies[1].position = r[1] | units.au
+        bodies[1].velocity = v[1] | units.kms
 
         if self.n_bodies == 2:
             bodies.mass = (1.0, 1.0) | units.MSun # equal mass
       
         elif self.n_bodies == 3:
             bodies.mass = (1.0, 1.0, 1.0) | units.MSun # equal mass
-            bodies[2].position = (K[2], K[3], 0.0) | units.au
+            bodies[2].position = r[2] | units.au
+            bodies[2].velocity = v[2] | units.kms
         
-        bodies = self._add_bodies_inner(bodies, [0, len(bodies)])
+        bodies = self._add_bodies_inner(bodies, self.bodies_inner)
 
         self.converter = nbody_system.nbody_to_si(bodies.mass.sum(), 1 | units.au)
-        bodies.move_to_center()
+        # bodies.move_to_center()
 
         # Plot initial state
         if self.settings['Integration']['plot'] == True:
             plot_state(bodies)
         return bodies
     
+
     def _initial_conditions_bridge(self):
         """
         _initial_conditions_bridge: choose initial conditions to be used in the problem and divide them for the bridge
@@ -146,20 +164,17 @@ class ThreeBody_env(gym.Env):
                 and velocities
         """
         # Create initial position, mass, and velocity for the bodies
-        ranges = self.settings['Integration']['ranges_coords']
-        ranges_np = np.array(list(ranges.values()))
-        if self.seed_initial != "None":
-            np.random.seed(seed = self.seed_initial)
-        K = np.random.uniform(low = ranges_np[:, 0], high = ranges_np[:, 1])
+        r, v = self._setup_initial_conds()
 
         bodies_global = Particles(self.n_bodies-1)
         bodies_local = Particles(1)
 
-        bodies_global[0].position = (0.0, 0.0, 0.0) | units.au
-        bodies_global[0].velocity = (0.0, 10.0, 0.0) | units.kms
-        bodies_local[0].position = (K[0], K[1], 0.0) | units.au
-        bodies_local[0].velocity = (-10.0, 0.0, 0.0) | units.kms
-
+        bodies_global[0].position = r[0] | units.au
+        bodies_global[0].velocity = v[0] | units.kms
+        
+        bodies_local[0].position = r[2] | units.au
+        bodies_local[0].velocity = v[2] | units.kms
+        
         if self.n_bodies == 2:
             bodies_global.mass = (1.0) | units.MSun # equal mass
             bodies_local.mass = (1.0) | units.MSun # equal mass
@@ -167,32 +182,33 @@ class ThreeBody_env(gym.Env):
         elif self.n_bodies == 3:
             bodies_global.mass = (1.0, 1.0) | units.MSun # equal mass
             bodies_local.mass = (1.0) | units.MSun # equal mass
-            bodies_global[1].position = (K[2], K[3], 0.0) | units.au
-        bodies_local = self._add_bodies_inner(bodies_local, [0, 1])
-        bodies_global = self._add_bodies_inner(bodies_global, [1, self.n_bodies])
+            bodies_global[1].position = r[1] | units.au
+            bodies_global[1].velocity = v[1] | units.kms
+        
+        bodies_global = self._add_bodies_inner(bodies_global, self.bodies_inner[0:self.n_bodies-1]) # first times
+        bodies_local = self._add_bodies_inner(bodies_local, [self.bodies_inner[self.n_bodies-1]])
 
         self.converter = nbody_system.nbody_to_si(bodies_global.mass.sum() + bodies_local.mass.sum(), 1 | units.au)
         
-        # bodies_global.move_to_center()
-        print(bodies_global)
-        print(bodies_local)
+        # print(bodies_local)
+        # print(bodies_global)
 
         # Plot initial state
         # if self.settings['Integration']['plot'] == True:
         #     plot_state(bodies) #TODO: allow plotting
         return bodies_global, bodies_local
     
-    def _add_bodies_inner(self, bodies, index_bodies):
+    def _add_bodies_inner(self, bodies, bodies_inner):
+        n_bodies = len(bodies)
         ranges = self.settings['Integration']['ranges_inner']
         ranges_np = np.array(list(ranges.values()))
-        for bod in range(index_bodies[0], index_bodies[1]):
-            bodies_inner = self.settings['Integration']['n_bodies_inner'][bod]
-            if bodies_inner > 0:
+        for bod in range(n_bodies):
+            if bodies_inner[bod] > 0:
                 if self.seed_initial != "None":
                     np.random.seed(seed = self.seed_initial)
-                K = lhs(len(ranges), samples = bodies_inner) * (ranges_np[:, 1]- ranges_np[:, 0]) + ranges_np[:, 0] 
+                K = lhs(len(ranges), samples = bodies_inner[bod]) * (ranges_np[:, 1]- ranges_np[:, 0]) + ranges_np[:, 0] 
 
-                for i in range(bodies_inner):
+                for i in range(bodies_inner[bod]):
                     sun, particle = generate_binaries(
                         bodies[bod].mass,
                         K[i, 0] | units.MSun,
@@ -208,6 +224,7 @@ class ThreeBody_env(gym.Env):
                     # position around the main body
                     particle.position += bodies[bod].position
                     particle.velocity += bodies[bod].velocity
+                    particle.mass = K[i, 0] | units.MSun
 
                     bodies.add_particles(particle)
         
@@ -400,8 +417,8 @@ class ThreeBody_env(gym.Env):
             # Same time step for the integrators and the bridge
             self.particles_global, self.particles_local = self._initial_conditions_bridge()
 
-            self.grav_global = self._initialize_integrator(self.actions[0])
-            self.grav_local = self._initialize_integrator(self.actions[0])
+            self.grav_global = self._initialize_integrator(self.t_step_integr[0])
+            self.grav_local = self._initialize_integrator(self.t_step_integr[1])
             self.grav_global.particles.add_particles(self.particles_global)
             self.grav_local.particles.add_particles(self.particles_local)
             
@@ -409,7 +426,6 @@ class ThreeBody_env(gym.Env):
             self.grav_bridge = bridge.Bridge(use_threading=False)
             self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
             self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
-            # self.grav_bridge.timestep = self.actions[0
             self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[0], bridge = True)
 
             self.channel = [self.grav_global.particles.new_channel_to(self.particles_global), \
@@ -419,7 +435,7 @@ class ThreeBody_env(gym.Env):
         else:
             # Initialize basic integrator and add particles
             self.particles = self._initial_conditions()
-            self.gravity = self._initialize_integrator(self.actions[0]) # start with most restrictive action
+            self.gravity = self._initialize_integrator(self.t_step_integr) # start with most restrictive action
             self.gravity.particles.add_particles(self.particles)
             self.channel = [self.gravity.particles.new_channel_to(self.particles)]
 
