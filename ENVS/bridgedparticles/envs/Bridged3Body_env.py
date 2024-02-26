@@ -601,8 +601,8 @@ class ThreeBody_env(gym.Env):
         close: finish simulation epoch
         """
         if self.bridged == True:
-            self.gravity_global.stop()
-            self.gravity_local.stop()
+            self.grav_global.stop()
+            self.grav_local.stop()
         else:
             self.gravity.stop()
 

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 
+from TrainingFunctions import DQN, load_reward, plot_reward
 from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
@@ -122,7 +123,8 @@ def load_state_files(env, steps, namefile = None):
 
 
 
-def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, legend_on = True):
+def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
+                            legend_on = True, axislabel_on = True):
     """
     plot_planets_trajectory: plot trajectory of three bodies
     INPUTS:
@@ -138,7 +140,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         x = state[0:steps, j, 2]
         y = state[0:steps, j, 3]
         m = state[0, j, 1]
-        size_marker = np.log(m)/30
+        size_marker = np.log10(m)/30
 
         ax.scatter(x[0], y[0], s = 20*size_marker,\
                    c = colors[j%len(colors)], \
@@ -154,8 +156,9 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         
     if legend_on == True:
         ax.legend(fontsize = labelsize)
-    ax.set_xlabel('x (au)', fontsize = labelsize)
-    ax.set_ylabel('y (au)', fontsize = labelsize)
+    if axislabel_on == True:
+        ax.set_xlabel('x (au)', fontsize = labelsize)
+        ax.set_ylabel('y (au)', fontsize = labelsize)
     
 def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12, steps = 30):
     """

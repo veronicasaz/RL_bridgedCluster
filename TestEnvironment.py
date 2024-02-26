@@ -13,7 +13,7 @@ from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
 from PlotsFunctions import run_trajectory, load_state_files, \
                             plot_planets_trajectory, plot_evolution
 
-def calculate_errors(cases, steps, namefile):
+def calculate_errors(env, cases, steps, namefile):
     state = list()
     cons = list()
     tcomp = list()
@@ -36,7 +36,7 @@ def calculate_errors(cases, steps, namefile):
 
     return E_E, T_c
 
-def plot_trajs(STATES, CONS, Titles, filenames, save_path = None):
+def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
     # Setup plot
     label_size = 18
     fig = plt.figure(figsize = (10,10))
@@ -64,7 +64,7 @@ def plot_trajs(STATES, CONS, Titles, filenames, save_path = None):
     # Plot energy error
     linestyle = '-'
     x_axis = np.arange(0, steps-1, 1)
-    Energy_error, T_comp = calculate_errors(len(STATES), steps, filenames)
+    Energy_error, T_comp = calculate_errors(env, len(STATES), steps, filenames)
     print(np.shape(Energy_error), np.shape(T_comp))
     ax2 = fig.add_subplot(gs1[1, :])
     ax3 = fig.add_subplot(gs1[2, :])
@@ -97,14 +97,14 @@ if __name__ == '__main__':
         env.bridged = True
         env.integrator = 'Hermite'
         env.t_step_integr = [1e-2, 1e-2] # smaller time-step parameter for the one with the planets
-        run_trajectory(seed = seed, action = 0, env = env,\
+        run_trajectory(seed = seed, action = 5, env = env,\
                                name_suffix = '_bridge_fast', steps = steps)
         
 
         env.bridged = True
         env.integrator = 'Hermite'
         env.t_step_integr = [1e-2, 1e-2] # smaller time-step parameter for the one with the planets
-        run_trajectory(seed = seed, action = 5, env = env,\
+        run_trajectory(seed = seed, action = 0, env = env,\
                                name_suffix = '_bridge_accurate', steps = steps)
         
         env.bridged = False
@@ -129,7 +129,8 @@ if __name__ == '__main__':
         state_nobridge_Huayno, cons_nobridge_Huayno, tcomp_nobridge_Huayno = load_state_files(env, steps, namefile = '_nobridge_Huayno')
         
         path_save = env.settings["Integration"]['savefile'] + env.subfolder
-        plot_trajs([state_nobridge_Hermite, state_nobridge_Huayno, state_bridge_fast, state_bridge_accurate], 
+        plot_trajs(env, \
+                   [state_nobridge_Hermite, state_nobridge_Huayno, state_bridge_fast, state_bridge_accurate], 
                    [], ['No bridge Hermite', 'No bridge Huayno', r'Bridge $10^{-2}$', r'Bridge $10^{-4}$'],\
                     ['_nobridge_Hermite', '_nobridge_Huayno', '_bridge_fast', '_bridge_accurate'], save_path = path_save)
         
