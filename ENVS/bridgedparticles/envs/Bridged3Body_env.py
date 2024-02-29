@@ -435,7 +435,7 @@ class ThreeBody_env(gym.Env):
         else:
             # Initialize basic integrator and add particles
             self.particles = self._initial_conditions()
-            self.gravity = self._initialize_integrator(self.t_step_integr) # start with most restrictive action
+            self.gravity = self._initialize_integrator(self.t_step_integr[0]) # start with most restrictive action
             self.gravity.particles.add_particles(self.particles)
             self.channel = [self.gravity.particles.new_channel_to(self.particles)]
 
@@ -468,7 +468,7 @@ class ThreeBody_env(gym.Env):
                 steps = self.settings['Integration']['max_steps']
             self.state = np.zeros((steps, self.n_bodies_total, 8)) # action, mass, rx3, vx3, 
             self.cons = np.zeros((steps, 5)) # action, E, Lx3, 
-            self.comp_time = np.zeros(self.settings['Integration']['max_steps']) # computation time
+            self.comp_time = np.zeros(steps) # computation time
             self._savestate(0, 0, particles_joined, 0.0, 0.0) # save initial state
 
         self.info_prev = [0.0, 0.0]

@@ -100,6 +100,7 @@ def run_trajectory(seed = 123, action = 'RL', env = None,
                 x, y, terminated, zz = env.step(action[i%len(action)])
                 reward[i] = env.reward
             i += 1
+        env.close()
     return reward
 
 def load_state_files(env, steps, namefile = None):
@@ -124,7 +125,7 @@ def load_state_files(env, steps, namefile = None):
 
 
 def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
-                            legend_on = True, axislabel_on = True):
+                            legend_on = True, axislabel_on = True, marker = 'o'):
     """
     plot_planets_trajectory: plot trajectory of three bodies
     INPUTS:
@@ -140,7 +141,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         x = state[0:steps, j, 2]
         y = state[0:steps, j, 3]
         m = state[0, j, 1]
-        size_marker = np.log10(m)/30
+        size_marker = np.log10(m)/10
 
         ax.scatter(x[0], y[0], s = 20*size_marker,\
                    c = colors[j%len(colors)], \
@@ -151,7 +152,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
                     color = colors[j%len(colors)], \
                     alpha = 0.1)
         
-        ax.scatter(x[1:], y[1:], s = size_marker, \
+        ax.scatter(x[1:], y[1:], marker = marker, s = size_marker, \
                     c = colors[j%len(colors)])        
         
     if legend_on == True:
