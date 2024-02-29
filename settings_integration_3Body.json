@@ -12,19 +12,19 @@
         "state_options_info": ["norm", "cart", "dist"],
         "seed": "None",
         "plot": false,
-	"t_step_integr": 1e-3,
-	"t_step_bridge": [1e-4, 1e-1],
+	"t_step_integr": [1e-3, 1e-3],
+	"t_step_bridge": [1e-3, 5e-2],
 	"number_actions": 6,
 	 "ranges_coords": {
-		  "x1": [5.0, 20.0],
+		  "x1": [5.0, 10.0],
 		  "y1": [0.0, 10.0],
-		  "x2": [0.0, -10.0],
-		  "y2": [5.0, 20.0]
+		  "x2": [-5.0, -10.0],
+		  "y2": [5.0, 15.0]
 	       },
 	  "ranges_inner": {
 	  "m": [1e-5, 1e-4],
-	  "a": [2, 4], 
-	  "e": [0.8, 0.9], 
+	  "a": [1, 2], 
+	  "e": [0.1, 0.5], 
 	  "i": [0.0, 10],
 	  "omega": [0, 360] ,
 	  "Omega": [0, 360],
@@ -36,21 +36,21 @@
 		"check_step": 1e-1,
 		"action": "range",
 		"number_actions": 6,
-		"range": [1e-4, 1e-1]
+		"range": [1e-4, 1e-2]
 		},
 	"Ph4":
 		{
 		"check_step": 1e-1,
 		"action": "range",
 		"number_actions": 6,
-		"range": [1e-4, 1e-1]
+		"range": [1e-4, 1e-2]
 		},
 	"Huayno":
 		{
 		"check_step": 1e-1,
 		"action": "range",
 		"number_actions": 6,
-		"range": [1e-5, 1e-1]
+		"range": [1e-5, 1e-2]
 		},
 	"Symple":
 		{
