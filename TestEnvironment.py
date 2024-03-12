@@ -62,7 +62,7 @@ def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
         
 
     # Plot energy error
-    linestyle = '-'
+    linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
     x_axis = np.arange(0, steps-1, 1)
     Energy_error, T_comp = calculate_errors(env, len(STATES), steps, filenames)
     print(np.shape(Energy_error), np.shape(T_comp))
@@ -70,9 +70,9 @@ def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
     ax3 = fig.add_subplot(gs1[2, :])
     for case in range(len(STATES)):
         plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case], \
-                       colorindex = case, linestyle = linestyle)
+                       colorindex = case, linestyle = linestyle[case])
         plot_evolution(ax3, x_axis, T_comp[1:, case], label = Titles[case], \
-                       colorindex = case, linestyle = linestyle)
+                       colorindex = case, linestyle = linestyle[case])
         ax2.set_xlabel('Step', fontsize = label_size)
         ax3.set_xlabel('Step', fontsize = label_size)
         ax2.set_ylabel('Energy Error', fontsize = label_size)
@@ -96,26 +96,31 @@ if __name__ == '__main__':
         """
         env.bridged = True
         env.integrator = 'Hermite'
-        env.t_step_integr = [1e-2, 1e-2] # smaller time-step parameter for the one with the planets
-        run_trajectory(seed = seed, action = 5, env = env,\
+        # bridge 0, integrator 0
+        run_trajectory(seed = seed, action = 12, env = env,\
                                name_suffix = '_bridge_fast', steps = steps)
         
-
+        
         env.bridged = True
         env.integrator = 'Hermite'
-        env.t_step_integr = [1e-2, 1e-2] # smaller time-step parameter for the one with the planets
+        # bridge 0, integrator 1
+        run_trajectory(seed = seed, action = 8, env = env,\
+                               name_suffix = '_bridge_mid', steps = steps)
+        
+        
+        env.bridged = True
+        env.integrator = 'Hermite'
+        # bridge 0, integrator 2
         run_trajectory(seed = seed, action = 0, env = env,\
                                name_suffix = '_bridge_accurate', steps = steps)
         
         env.bridged = False
         env.integrator = 'Hermite'
-        env.t_step_integr = 1e-2
         run_trajectory(seed = seed, action = 0, env = env,\
                                name_suffix = '_nobridge_Hermite', steps = steps)
         
         env.bridged = False
         env.integrator = 'Huayno'
-        env.t_step_integr = 1e-2
         run_trajectory(seed = seed, action = 0, env = env,\
                                name_suffix = '_nobridge_Huayno', steps = steps)
     
@@ -124,15 +129,16 @@ if __name__ == '__main__':
         plot_bridge_vs_no_bridge: load files and call plot
         """
         state_bridge_fast, cons_bridge_fast, tcomp_bridge_fast = load_state_files(env, steps, namefile = '_bridge_fast')
+        state_bridge_mid, cons_bridge_mid, tcomp_bridge_mid = load_state_files(env, steps, namefile = '_bridge_mid')
         state_bridge_accurate, cons_bridge_accurate, tcomp_bridge_accurate = load_state_files(env, steps, namefile = '_bridge_accurate')
         state_nobridge_Hermite, cons_nobridge_Hermite, tcomp_nobridge_Hermite = load_state_files(env, steps, namefile = '_nobridge_Hermite')
         state_nobridge_Huayno, cons_nobridge_Huayno, tcomp_nobridge_Huayno = load_state_files(env, steps, namefile = '_nobridge_Huayno')
         
         path_save = env.settings["Integration"]['savefile'] + env.subfolder
         plot_trajs(env, \
-                   [state_nobridge_Hermite, state_nobridge_Huayno, state_bridge_fast, state_bridge_accurate], 
-                   [], ['No bridge Hermite', 'No bridge Huayno', r'Bridge $10^{-2}$', r'Bridge $10^{-4}$'],\
-                    ['_nobridge_Hermite', '_nobridge_Huayno', '_bridge_fast', '_bridge_accurate'], save_path = path_save)
+                   [state_nobridge_Hermite, state_nobridge_Huayno, state_bridge_fast, state_bridge_mid, state_bridge_accurate], 
+                   [], ['No bridge Hermite', 'No bridge Huayno', r'Bridge $10^{-1}$', r'Bridge $2.15\times 10^{-3}$', r'Bridge $10^{-6}$'],\
+                    ['_nobridge_Hermite', '_nobridge_Huayno', '_bridge_fast', '_bridge_mid', '_bridge_accurate'], save_path = path_save)
         
     if experiment == 1: # run bridged vs not bridged for 2 particles
         
@@ -168,7 +174,7 @@ if __name__ == '__main__':
         env.subfolder = '3_runBridgedvsNobridge_planetary/'
         env.bodies_inner = [0, 0, 2]
 
-        run_bridge_vs_no_bridge(env, seed, steps)
+        # run_bridge_vs_no_bridge(env, seed, steps)
         plot_bridge_vs_no_bridge(env, steps)
 
 

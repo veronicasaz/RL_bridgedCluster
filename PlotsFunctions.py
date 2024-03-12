@@ -21,7 +21,8 @@ markers = ['o', 'x', '.', '^', 's']
 
 def run_trajectory(seed = 123, action = 'RL', env = None, 
                    name_suffix = None, steps = None,
-                   reward_f = None, model_path = None, steps_suffix= ''):
+                   reward_f = None, model_path = None, steps_suffix= '',
+                   architecture = None, save_path = None):
     """
     run_trajectory: Run one initialization with RL or with an integrator
     INPUTS:
@@ -50,6 +51,7 @@ def run_trajectory(seed = 123, action = 'RL', env = None,
     
     if model_path == None:
         model_path = env.settings['Training']['savemodel'] +'model_weights.pth'
+        
     state, info = env.reset(seed = seed, steps = steps, typereward = reward_type)
 
     reward = np.zeros(steps)
@@ -60,7 +62,11 @@ def run_trajectory(seed = 123, action = 'RL', env = None,
          # Load trained policy network
         n_actions = env.action_space.n
         n_observations = len(state)
-        model = DQN(n_observations, n_actions, settings = env.settings) # we do not specify ``weights``, i.e. create untrained model
+        if architecture != None:
+            model = DQN(n_observations, n_actions, settings = env.settings, \
+                        layers = architecture[0], neurons = architecture[1])
+        else:
+            model = DQN(n_observations, n_actions, settings = env.settings) # we do not specify ``weights``, i.e. create untrained model
         model.load_state_dict(torch.load(model_path))
         model.eval()
         
@@ -76,7 +82,10 @@ def run_trajectory(seed = 123, action = 'RL', env = None,
             reward[i] = env.reward
             i += 1
         env.close()
-        np.save(env.settings['Integration']['savefile'] + 'RL_steps_taken'+steps_suffix, np.array(steps_taken))
+        if save_path == None:
+            np.save(env.settings['Integration']['savefile'] + 'RL_steps_taken'+steps_suffix, np.array(steps_taken))
+        else:
+            np.save(save_path + 'RL_steps_taken'+steps_suffix, np.array(steps_taken))
     
     # Case 2: random actions 
     elif action == 'random':
@@ -161,7 +170,8 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         ax.set_xlabel('x (au)', fontsize = labelsize)
         ax.set_ylabel('y (au)', fontsize = labelsize)
     
-def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12, steps = 30):
+def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12, 
+                          steps = 30, legend = True):
     """
     plot_planets_distance: plot steps vs pairwise-distance of the bodies
     INPUTS:
@@ -186,7 +196,8 @@ def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12, steps
         size_marker = np.log(m)/30
     for i in range(len(Dist)):
         ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5)
-    ax.legend(fontsize =labelsize, framealpha = 0.5)
+    if legend == True:
+        ax.legend(fontsize =labelsize, framealpha = 0.5)
     ax.set_yscale('log')
     return Dist
 

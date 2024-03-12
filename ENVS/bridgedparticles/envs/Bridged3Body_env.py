@@ -59,7 +59,8 @@ def orbital_period(a, Mtot, G = constants.G):
 
 
 class ThreeBody_env(gym.Env):
-    def __init__(self, render_mode = None, integrator = 'Hermite', subfolder = '', suffix = ''):
+    def __init__(self, render_mode = None, integrator = 'Hermite', \
+                 subfolder = '', suffix = '', save_path = None):
         """
         TwoBody_env: environment to integrate a system of two bodies being bridged
 
@@ -82,13 +83,31 @@ class ThreeBody_env(gym.Env):
         self.integrator = integrator
 
         # From a range of paramters
-        if self.settings['Integration'][self.integrator]['action'] == 'range':
+        if self.settings['Integration']['action'] == 'range':
             low = self.settings['Integration']['t_step_bridge'][0]
             high = self.settings['Integration']['t_step_bridge'][-1]
             n_actions = self.settings['Integration']['number_actions']
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
+        elif self.settings['Integration']['action'] == 'combinations':
+            low = self.settings['Integration']['t_step_bridge'][0]
+            high = self.settings['Integration']['t_step_bridge'][-1]
+            n_actions = self.settings['Integration']['number_actions']
+            actions_1 = np.logspace(np.log10(low), np.log10(high), \
+                                       num = n_actions, base = 10,
+                                       endpoint = True)
+            low = self.settings['Integration']['t_step_integr'][0]
+            high = self.settings['Integration']['t_step_integr'][-1]
+            n_actions = self.settings['Integration']['number_actions']
+            actions_2 = np.logspace(np.log10(low), np.log10(high), \
+                                       num = n_actions, base = 10,
+                                       endpoint = True)
+            comb = np.meshgrid(actions_1, actions_2)
+            self.actions = np.zeros((len(actions_1)* len(actions_2), 2))
+            self.actions[:, 0] = comb[0].flatten() # bridge, tstep param
+            self.actions[:, 1] = comb[1].flatten()
+
         
         self.action_space = gym.spaces.Discrete(len(self.actions)) 
         
@@ -96,11 +115,12 @@ class ThreeBody_env(gym.Env):
         self.bridged = self.settings['Integration']['bridged']
         self.W = self.settings['Training']['weights']
         self.seed_initial = self.settings['Integration']['seed']
-        self.t_step_integr = self.settings['Integration']['t_step_integr']
         self.bodies_inner = self.settings['Integration']['n_bodies_inner']
 
         self.subfolder = subfolder # added subfolder where to save files
         self.suffix = suffix # added info for saving files
+
+        self.save_path = save_path
 
     def _setup_initial_conds(self):
         ranges = self.settings['Integration']['ranges_coords']
@@ -343,7 +363,7 @@ class ThreeBody_env(gym.Env):
             else:
                 g = Hermite()
             # Collision detection and softening
-            g.stopping_conditions.timeout_detection.enable()
+            # g.stopping_conditions.timeout_detection.enable()
             g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2
         elif self.integrator == 'Ph4': 
             if self.settings['Integration']['units'] == 'si':
@@ -417,8 +437,8 @@ class ThreeBody_env(gym.Env):
             # Same time step for the integrators and the bridge
             self.particles_global, self.particles_local = self._initial_conditions_bridge()
 
-            self.grav_global = self._initialize_integrator(self.t_step_integr[0])
-            self.grav_local = self._initialize_integrator(self.t_step_integr[1])
+            self.grav_global = self._initialize_integrator(self.actions[0][1])
+            self.grav_local = self._initialize_integrator(self.actions[0][1])
             self.grav_global.particles.add_particles(self.particles_global)
             self.grav_local.particles.add_particles(self.particles_local)
             
@@ -426,7 +446,7 @@ class ThreeBody_env(gym.Env):
             self.grav_bridge = bridge.Bridge(use_threading=False)
             self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
             self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
-            self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[0], bridge = True)
+            self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[0][0], bridge = True)
 
             self.channel = [self.grav_global.particles.new_channel_to(self.particles_global), \
                             self.grav_local.particles.new_channel_to(self.particles_local)]
@@ -435,7 +455,7 @@ class ThreeBody_env(gym.Env):
         else:
             # Initialize basic integrator and add particles
             self.particles = self._initial_conditions()
-            self.gravity = self._initialize_integrator(self.t_step_integr[0]) # start with most restrictive action
+            self.gravity = self._initialize_integrator(self.actions[0][1]) # start with most restrictive action
             self.gravity.particles.add_particles(self.particles)
             self.channel = [self.gravity.particles.new_channel_to(self.particles)]
 
@@ -469,7 +489,7 @@ class ThreeBody_env(gym.Env):
             self.state = np.zeros((steps, self.n_bodies_total, 8)) # action, mass, rx3, vx3, 
             self.cons = np.zeros((steps, 5)) # action, E, Lx3, 
             self.comp_time = np.zeros(steps) # computation time
-            self._savestate(0, 0, particles_joined, 0.0, 0.0) # save initial state
+            self._savestate(0, 0, particles_joined, 0.0, 0.0, 0.0) # save initial state
 
         self.info_prev = [0.0, 0.0]
         return state_RL, self.info_prev
@@ -492,6 +512,12 @@ class ThreeBody_env(gym.Env):
         if Delta_E_prev == 0.0: # for the initial step
             return 0
         else:
+            if self.typereward == 0:
+                a = -(W[0]* np.log10(abs(Delta_E)) + \
+                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
+                        (W[2]*1/abs(np.log10(action[0]+action[1])) )
+                return a
+            
             if self.typereward == 1:
                 a = -(W[0]* np.log10(abs(Delta_E)) + \
                          W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
@@ -530,13 +556,15 @@ class ThreeBody_env(gym.Env):
         """
         self.iteration += 1
 
-        check_step = self.settings['Integration'][self.integrator]['check_step'] # final time for step integration
+        check_step = self.settings['Integration']['check_step'] # final time for step integration
         t0_step = time.time()
 
         # Apply action
         if self.bridged == True:
             # self.grav_bridge.timestep = self.actions[0]
-            self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[action], bridge = True)
+            self.grav_bridge = self.apply_action(self.grav_bridge, self.actions[action][0], bridge = True)
+            self.grav_global = self.apply_action(self.grav_global, self.actions[action][1], bridge = False)
+            self.grav_local = self.apply_action(self.grav_local, self.actions[action][1], bridge = False)
         else:
             self.gravity = self.apply_action(self.gravity, self.actions[action])
 
@@ -564,7 +592,7 @@ class ThreeBody_env(gym.Env):
         # Get information for the reward
         info_error = self._get_info(particles_joined)
         if self.save_state_to_file == True:
-            self._savestate(action, self.iteration, particles_joined, info_error[0], info_error[1]) # save initial state
+            self._savestate(action, self.iteration, particles_joined, info_error[0], info_error[1], T) # save initial state
         
         # Information to evaluate
         state = self._get_state(particles_joined, info_error[0])
@@ -572,9 +600,6 @@ class ThreeBody_env(gym.Env):
         self.reward = reward
         self.info_prev = info_error
 
-        self.comp_time[self.iteration-1] = T
-        if self.save_state_to_file == True:
-            np.save(self.settings['Integration']['savefile'] + self.subfolder + '_tcomp' + self.suffix, self.comp_time)
 
         # Display information at each step
         if self.settings['Training']['display'] == True:
@@ -654,7 +679,7 @@ class ThreeBody_env(gym.Env):
                                  action, \
                                  reward))
         
-    def _savestate(self, action, step, particles, E, L):
+    def _savestate(self, action, step, particles, E, L, T):
         """
         _savestate: save state of the system to file
         INPUTS:
@@ -671,9 +696,17 @@ class ThreeBody_env(gym.Env):
         self.cons[step, 0] = action
         self.cons[step, 1] = E
         self.cons[step, 2:] = L
+        self.comp_time[step-1] = T
 
-        np.save(self.settings['Integration']['savefile'] + self.subfolder + '_state'+ self.suffix, self.state)
-        np.save(self.settings['Integration']['savefile'] + self.subfolder + '_cons'+ self.suffix, self.cons)
+        if self.save_path == None:
+            np.save(self.settings['Integration']['savefile'] + self.subfolder + '_state'+ self.suffix, self.state)
+            np.save(self.settings['Integration']['savefile'] + self.subfolder + '_cons'+ self.suffix, self.cons)
+            np.save(self.settings['Integration']['savefile'] + self.subfolder + '_tcomp' + self.suffix, self.comp_time)
+        else:
+            np.save(self.save_path + '_state'+ self.suffix, self.state)
+            np.save(self.save_path + '_cons'+ self.suffix , self.cons)
+            np.save(self.save_path+ '_tcomp'+ self.suffix, self.comp_time)
+
     
     def loadstate(self):
         """
@@ -683,9 +716,14 @@ class ThreeBody_env(gym.Env):
             cons: energy error, angular momentum
             tcomp: computation time
         """
-        state = np.load(self.settings['Integration']['savefile'] + self.subfolder + '_state'+ self.suffix+'.npy')
-        cons = np.load(self.settings['Integration']['savefile'] + self.subfolder + '_cons'+ self.suffix+'.npy')
-        tcomp = np.load(self.settings['Integration']['savefile'] +  self.subfolder + '_tcomp'+ self.suffix+'.npy')
+        if self.save_path == None:
+            state = np.load(self.settings['Integration']['savefile'] + self.subfolder + '_state'+ self.suffix+'.npy')
+            cons = np.load(self.settings['Integration']['savefile'] + self.subfolder + '_cons'+ self.suffix+'.npy')
+            tcomp = np.load(self.settings['Integration']['savefile'] +  self.subfolder + '_tcomp'+ self.suffix+'.npy')
+        else:
+            state = np.load(self.save_path + '_state'+ self.suffix+'.npy')
+            cons = np.load(self.save_path + '_cons'+ self.suffix+'.npy' )
+            tcomp = np.load(self.save_path+ '_tcomp'+ self.suffix+'.npy')
         return state, cons, tcomp
 
     def plot_orbit(self):

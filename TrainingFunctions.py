@@ -57,7 +57,7 @@ class ReplayMemory(object):
     
 
 class DQN(nn.Module):
-    def __init__(self, n_observations, n_actions, settings = None):
+    def __init__(self, n_observations, n_actions, settings = None, neurons = None, layers = None):
         """
         DQN: creation of the networks
         INPUTS:
@@ -67,9 +67,20 @@ class DQN(nn.Module):
         """
         self.settings = settings
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, self.settings['Training']['neurons'])
-        self.layer2 = nn.Linear(self.settings['Training']['neurons'], self.settings['Training']['neurons'])
-        self.layer3 = nn.Linear(self.settings['Training']['neurons'], n_actions)
+        if neurons == None:
+            self.neurons = self.settings['Training']['neurons']
+        else:
+            self.neurons = int(neurons)
+        
+        self.layer1 = nn.Linear(n_observations, self.neurons)
+        self.layer2 = nn.Linear(self.neurons, self.neurons)
+        self.layer3 = nn.Linear(self.neurons, n_actions)
+
+        if layers == None:
+            self.hidden_layers = self.settings['Training']['hidden_layers']
+        else:
+            self.hidden_layers = int(layers)
+
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
@@ -82,7 +93,7 @@ class DQN(nn.Module):
             output
         """
         x = F.relu(self.layer1(x))
-        for i in range(self.settings['Training']['hidden_layers']):
+        for i in range(self.hidden_layers):
             x = F.relu(self.layer2(x))
         return self.layer3(x)
     
