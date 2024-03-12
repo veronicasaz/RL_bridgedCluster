@@ -87,7 +87,7 @@ save_huberloss = list()
 
 # Training loop
 env.subfolder = "2_Training/"
-for i_episode in range(settings['Training']['max_iter']):
+for i_episode in range(settings['Training']['max_episodes']):
     print("Training episode: %i"%i_episode)
 
     # Initialize the environment and get it's state

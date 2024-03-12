@@ -131,7 +131,19 @@ def load_state_files(env, steps, namefile = None):
 
     return state, cons, tcomp
 
+def calculate_errors(states, cons, tcomp, steps):
+    cases = len(states)
 
+    # Calculate the energy errors
+    E_E = np.zeros((steps, cases))
+    E_M = np.zeros((steps, cases))
+    T_c = np.zeros((steps, cases))
+    for i in range(cases):
+        E_E[1:, i] = abs(cons[i][1:steps, 1]) # absolute relative energy error
+        E_M[1:, i] = np.linalg.norm((cons[i][1:steps, 2:] - cons[i][0:steps-1, 2:]), axis = 1) # relative angular momentum error    
+        T_c[1:, i] = np.cumsum(tcomp[i][1:steps]) # add individual computation times
+
+    return E_E, T_c
 
 def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
                             legend_on = True, axislabel_on = True, marker = 'o'):

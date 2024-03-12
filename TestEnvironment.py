@@ -10,31 +10,12 @@ import matplotlib.pyplot as plt
 import matplotlib
 from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
+
 from PlotsFunctions import run_trajectory, load_state_files, \
-                            plot_planets_trajectory, plot_evolution
+                            plot_planets_trajectory, plot_evolution, \
+                            calculate_errors
 
-def calculate_errors(env, cases, steps, namefile):
-    state = list()
-    cons = list()
-    tcomp = list()
-    name = list()
-    for i in range(cases):
-        state_i, cons_i, tcomp_i = load_state_files(env, steps, namefile = namefile[i])
-        state.append(state_i)
-        cons.append(cons_i)
-        tcomp.append(tcomp_i)
-        name.append('Case_%i'%i)
 
-    # Calculate the energy errors
-    E_E = np.zeros((steps, cases))
-    E_M = np.zeros((steps, cases))
-    T_c = np.zeros((steps, cases))
-    for i in range(cases):
-        E_E[1:, i] = abs(cons[i][1:, 1]) # absolute relative energy error
-        E_M[1:, i] = np.linalg.norm((cons[i][1:, 2:] - cons[i][0, 2:]), axis = 1) # relative angular momentum error
-        T_c[:, i] = np.cumsum(tcomp[i]) # add individual computation times
-
-    return E_E, T_c
 
 def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
     # Setup plot
