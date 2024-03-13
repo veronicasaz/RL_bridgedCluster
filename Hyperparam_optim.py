@@ -6,6 +6,7 @@ import matplotlib
 from IPython.display import clear_output
 import gym
 import torch
+torch.manual_seed(0)
 import torch.optim as optim
 from collections import namedtuple, deque
 from itertools import count
@@ -171,9 +172,10 @@ def train_sample(x, f_args):
     
 def plot_results(path, ind, m_iter):
     pop = np.genfromtxt(path, delimiter=',')
-    index_min = np.where(pop[:,0] == min(pop[:,0]))[0]
-    for i in range(m_iter):
-        plt.scatter(np.ones(ind)*i, pop[i*ind:i*ind+ind, 0])
+    index_min = np.where(pop[:,2] == min(pop[:,2]))[0]
+    # for i in range(m_iter):
+    for i in range(np.shape(pop)[0]//ind):
+        plt.scatter(np.ones(ind)*i, pop[i*ind:i*ind+ind, 2])
     plt.ylabel("Fitness: test MSE ")
     plt.xlabel("Iteration")
     # plt.yscale("symlog")
@@ -192,7 +194,7 @@ def find_file(text, names):
 def test_results(path, ind, m_iter):
     steps = 80
     seed = 1
-    n_plots = ind
+    n_plots = 8
     
     env = ThreeBody_env()
     env.subfolder = '2_TrainingResults/'
@@ -216,6 +218,7 @@ def test_results(path, ind, m_iter):
     TITLES_bridge =  [ r'Bridge 00', r'Bridge 30', r'Bridge 22', r'Bridge 03', r'Bridge 33']
     PATHS_bridge = ['_bridge_b0_i0','_bridge_b3_i0','_bridge_b2_i2','_bridge_b0_i3','_bridge_b3_i3']
 
+    ######################################
     # Create files with RL
     env = ThreeBody_env()
     path_save = env.settings["Training"]['savemodel'] + 'hyperparam_optim/run/'
@@ -228,7 +231,18 @@ def test_results(path, ind, m_iter):
     with open(path_csv, newline='') as csvfile:
         spamreader = csv.reader(csvfile)
         for row in spamreader:
-            PARAMS.append(row)
+            PARAMS.append([ float(i) for i in row ])
+    PARAMS = np.array(PARAMS)
+
+    # Choose 8 best networks
+    all_indexes = np.copy(PARAMS[:, 2])
+    indexes = np.zeros(n_plots)
+    for i in range(len(indexes)):
+        indexes[i] = int(np.where(all_indexes == min(all_indexes))[0])
+        all_indexes[int(indexes[i])] = max(all_indexes) + 1 # large value to avoid it being the minimum
+
+    indexes = [int(x) for x in indexes]
+    PARAMS_2 = PARAMS[indexes, :]
 
     for j in range(n_plots):
         # env = ThreeBody_env()
@@ -236,19 +250,26 @@ def test_results(path, ind, m_iter):
         env.bridged = True
         env.integrator = 'Hermite'
         env.save_path = path_save
-
-        layers = int(float(PARAMS[ind*(m_iter+1)+j][2]))
-        neurons = int(float(PARAMS[ind*(m_iter+1) +j][3]))
+            
+        # layers = int(float(PARAMS[ind*(m_iter+1)+j][2]))
+        # neurons = int(float(PARAMS[ind*(m_iter+1) +j][3]))
+        layers = int(float(PARAMS_2[j][4]))
+        neurons = int(float(PARAMS_2[j][5]))
 
         # Load trained model
+        # text = env.settings['Training']['savemodel'][2:] +\
+        #             'hyperparam_optim/'+ str(m_iter) + '_'+str(j)+'_'+\
+        #             'model_weights'
+        print(j, indexes)
         text = env.settings['Training']['savemodel'][2:] +\
-                    'hyperparam_optim/'+ str(m_iter) + '_'+str(j)+'_'+\
+                    'hyperparam_optim/'+ str(int(PARAMS_2[j, 0])) + '_'+str(int(PARAMS_2[j, 1]))+'_'+\
                     'model_weights'
+        print(text)
         model_path = './' + find_file( text, file_names)[0] 
-        # run_trajectory(seed = seed, action = 'RL', env = env,\
-        #                     name_suffix = '_bridge_RL_' + str(j), steps = steps,
-        #                     model_path = model_path, architecture = [layers, neurons],
-        #                     save_path = path_save, steps_suffix = str(j))
+        run_trajectory(seed = seed, action = 'RL', env = env,\
+                            name_suffix = '_bridge_RL_' + str(j), steps = steps,
+                            model_path = model_path, architecture = [layers, neurons],
+                            save_path = path_save, steps_suffix = str(j))
         
 
     # Load files with RL and plot each of them
@@ -305,5 +326,5 @@ if __name__ == '__main__':
     # print("X min", x_minVal)
     # print('Min', lastMin)
 
-    # plot_results("./Training_Results/hyperparam_optim/", ind, m_iter)
+    # plot_results("./Training_Results/hyperparam_optim/evol_population.csv", ind, m_iter)
     test_results("./Training_Results/hyperparam_optim/", ind, m_iter)

@@ -301,18 +301,24 @@ def EvolAlgorithm(f, bounds, *args, **kwargs):
     minVal = min(Sol[:,0])
     x_minVal = Sol[0,:]
 
+
+    counter = 0
+    noImprove = 0
+    lastMin = minVal
+
     # with open('population.txt', 'w') as myfile:
     #     myfile.write(pop_0)
-    with open(path_save + "evol_population.csv", "w+") as output:
+    with open(path_save + "evol_population.csv", "w") as output:
+        pop_save = np.zeros((np.shape(pop_0)[0], np.shape(pop_0)[1]+2))
+        pop_save[:, 2:] = pop_0
+        pop_save[:, 0] = counter
+        pop_save[:, 1] = np.arange(ind)
         wr = csv.writer(output)
-        wr.writerows(pop_0)
+        wr.writerows(pop_save)
     
     ###############################################
     ###### NEXT GENERATION                  #######
     ###############################################
-    noImprove = 0
-    counter = 0
-    lastMin = minVal
     
     Best = np.zeros([max_iter+1,len(bounds)+1])
     while noImprove <= max_iter_success and counter <= max_iter :
@@ -358,7 +364,7 @@ def EvolAlgorithm(f, bounds, *args, **kwargs):
         # Fitness
         if x_add != False:
             x_add2 = x_add.copy()
-            x_add2.append(counter)
+            x_add2.append(counter+1)
         pop = f_evaluate(pop, x_add2)
 
         Sol = pop[pop[:,0].argsort()]
@@ -384,9 +390,16 @@ def EvolAlgorithm(f, bounds, *args, **kwargs):
         # save all values
         # with open('population.txt', 'a') as myfile:
         #     myfile.write(pop)
-        with open(path_save+ "evol_population.csv", "a") as output:
+        # with open(path_save+ "evol_population.csv", "a") as output:
+        #     wr = csv.writer(output)
+        #     wr.writerows(pop)
+        with open(path_save + "evol_population.csv", "a") as output:
+            pop_save = np.zeros((np.shape(pop)[0], np.shape(pop)[1]+2))
+            pop_save[:, 2:] = pop
+            pop_save[:, 0] = counter
+            pop_save[:, 1] = np.arange(ind)
             wr = csv.writer(output)
-            wr.writerows(pop)
+            wr.writerows(pop_save)
 
         # save minimum
         if counter % 5 == 0:
