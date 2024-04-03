@@ -8,13 +8,116 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 import matplotlib
+import torch
+
 from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
+from ENVS.bridgedparticles.envs.BridgedCluster_env import BridgedCluster_env
+from TrainingFunctions import DQN
 
-from PlotsFunctions import run_trajectory, load_state_files, \
-                            plot_planets_trajectory, plot_evolution, \
-                            calculate_errors
+from PlotsFunctions import plot_planets_trajectory, plot_evolution
 
+
+def run_trajectory(env, action = 'RL', model_path = None, architecture = None):
+    """
+    run_trajectory: Run one initialization with RL or with an integrator
+    INPUTS:
+        action: fixed action or 'RL' 
+        env: environment to simulate
+        name_suffix: suffix to be added for the file saving
+        steps: number of steps to simulate
+        reward_f: type of reward to use for the simulation and weights for the 3 terms
+        model_path: path to the trained RL algorithm
+        steps_suffix: suffix for the file with the steps taken
+
+    OUTPUTS:
+        reward: reward for each step
+    """
+    
+    if model_path == None:
+        model_path = env.settings['Training']['savemodel'] +'model_weights.pth'
+        
+    state, info = env.reset(seed = seed, steps = steps, typereward = reward_type)
+
+    reward = np.zeros(steps)
+    i = 0
+
+    # Case 1: use trained RL algorithm
+    if action == 'RL':
+         # Load trained policy network
+        n_actions = env.action_space.n
+        n_observations = len(state)
+        if architecture != None:
+            model = DQN(n_observations, n_actions, settings = env.settings, \
+                        layers = architecture[0], neurons = architecture[1])
+        else:
+            model = DQN(n_observations, n_actions, settings = env.settings) # we do not specify ``weights``, i.e. create untrained model
+        model.load_state_dict(torch.load(model_path))
+        model.eval()
+        
+        steps_taken = list()
+        steps_taken.append(0) # initial conditions
+
+        # Take steps
+        while terminated == False:
+            state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+            action = model(state).max(1)[1].view(1, 1)
+            steps_taken.append(action.item())
+            state, y, terminated, info = env.step(action.item())
+            reward[i] = env.reward
+        path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+                'reward_' + env.settings['Integration']['suffix']
+        np.save(path, np.array(reward))
+        np.save(env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'RL_steps_taken_'  + env.settings['Integration']['suffix'], np.array(steps_taken))
+        env.close()
+    
+    # Case 3: fixed action throughout the simulation
+    else:
+        while terminated == False:
+            x, y, terminated, zz = env.step(action)
+            reward[i] = env.reward
+            i += 1
+        path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+                'reward_' + env.settings['Integration']['suffix']
+        np.save(path, np.array(reward))
+        env.close()
+    return reward
+
+
+def load_state_files(env, steps, namefile = None):
+    """
+    load_state_files: Load run information 
+    INPUTS: 
+        env: environment of the saved files
+        steps: steps taken
+        namefile: suffix for the loading 
+    OUTPUTS:
+        state: state of the bodies in the system
+        cons: action, energy error, angular momentum error
+        tcomp: computation time
+    """
+    env.suffix = (namefile)
+    state = env.loadstate()[0][0:steps, :, :]
+    cons = env.loadstate()[1][0:steps, :]
+    tcomp = env.loadstate()[2][0:steps]
+
+    return state, cons, tcomp
+
+
+def calculate_errors(states, cons, tcomp, steps):
+    cases = len(states)
+
+    # Calculate the energy errors
+    E_E = np.zeros((steps, cases))
+    E_M = np.zeros((steps, cases))
+    T_c = np.zeros((steps, cases))
+    for i in range(cases):
+        E_E[1:, i] = abs(cons[i][1:steps, 1]) # absolute relative energy error
+        E_M[1:, i] = np.linalg.norm((cons[i][1:steps, 2:] - cons[i][0:steps-1, 2:]), axis = 1) # relative angular momentum error    
+        T_c[1:, i] = np.cumsum(tcomp[i][1:steps]) # add individual computation times
+
+    return E_E, T_c
 
 
 def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
@@ -68,95 +171,34 @@ def plot_trajs(env, STATES, CONS, Titles, filenames, save_path = None):
     plt.show()
 
 if __name__ == '__main__':
-    experiment = 3 # number of the experiment to be run
-    seed = 1
-
-    def run_bridge_vs_no_bridge(env, seed, steps):
-        """
-        run_bridge_vs_no_bridge: run commands to run trajectories and save data
-        """
-        env.bridged = True
-        env.integrator = 'Hermite'
-        # bridge 0, integrator 0
-        run_trajectory(seed = seed, action = 12, env = env,\
-                               name_suffix = '_bridge_fast', steps = steps)
-        
-        
-        env.bridged = True
-        env.integrator = 'Hermite'
-        # bridge 0, integrator 1
-        run_trajectory(seed = seed, action = 8, env = env,\
-                               name_suffix = '_bridge_mid', steps = steps)
-        
-        
-        env.bridged = True
-        env.integrator = 'Hermite'
-        # bridge 0, integrator 2
-        run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_bridge_accurate', steps = steps)
-        
-        env.bridged = False
-        env.integrator = 'Hermite'
-        run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_nobridge_Hermite', steps = steps)
-        
-        env.bridged = False
-        env.integrator = 'Huayno'
-        run_trajectory(seed = seed, action = 0, env = env,\
-                               name_suffix = '_nobridge_Huayno', steps = steps)
-    
-    def plot_bridge_vs_no_bridge(env, steps):
-        """
-        plot_bridge_vs_no_bridge: load files and call plot
-        """
-        state_bridge_fast, cons_bridge_fast, tcomp_bridge_fast = load_state_files(env, steps, namefile = '_bridge_fast')
-        state_bridge_mid, cons_bridge_mid, tcomp_bridge_mid = load_state_files(env, steps, namefile = '_bridge_mid')
-        state_bridge_accurate, cons_bridge_accurate, tcomp_bridge_accurate = load_state_files(env, steps, namefile = '_bridge_accurate')
-        state_nobridge_Hermite, cons_nobridge_Hermite, tcomp_nobridge_Hermite = load_state_files(env, steps, namefile = '_nobridge_Hermite')
-        state_nobridge_Huayno, cons_nobridge_Huayno, tcomp_nobridge_Huayno = load_state_files(env, steps, namefile = '_nobridge_Huayno')
-        
-        path_save = env.settings["Integration"]['savefile'] + env.subfolder
-        plot_trajs(env, \
-                   [state_nobridge_Hermite, state_nobridge_Huayno, state_bridge_fast, state_bridge_mid, state_bridge_accurate], 
-                   [], ['No bridge Hermite', 'No bridge Huayno', r'Bridge $10^{-1}$', r'Bridge $2.15\times 10^{-3}$', r'Bridge $10^{-6}$'],\
-                    ['_nobridge_Hermite', '_nobridge_Huayno', '_bridge_fast', '_bridge_mid', '_bridge_accurate'], save_path = path_save)
-        
-    if experiment == 1: # run bridged vs not bridged for 2 particles
+    experiment = 1 # number of the experiment to be run
+            
+    if experiment == 1: # run bridge for all actions
         
         steps = 100
 
-        env = TwoBody_env()
-        env.n_bodies = 2 # overwrite to 3 bodies
-        env.subfolder = '1_runBridgedvsNobridge_2BP/'
-        env.t_step_integr = 1e-3
-        env.t_step_bridge = 1e-3
+        env = BridgedCluster_env()
+        env.settings['Integration']['subfolder'] = '1_run_actions/'
 
-        run_bridge_vs_no_bridge(env, seed, steps)
-        plot_bridge_vs_no_bridge(env, steps)
+        NAMES = []
+        for act in range(env.settings['RL']['number_actions']):
+            NAMES.append('action'+ str(env.actions[act]))
+            env.settings['Integration']['suffix'] = NAMES[act]
+            run_trajectory(env, action = act)
+
+        STATE = []
+        CONS = []
+        TCOMP = []
+        for act in range(env.settings['RL']['number_actions']):
+            state, cons, tcomp = load_state_files(env, namefile = NAMES[act])
+            STATE.append(state)
+            CONS.append(cons)
+            TCOMP.append(tcomp)
+
+        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'Action_comparison.png'
+        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
         
-    elif experiment == 2: # run bridged vs not bridged for 3 particles
-        steps = 30
-
-        env = TwoBody_env()
-        env.n_bodies = 3 # overwrite to 3 bodies
-        env.subfolder = '2_runBridgedvsNobridge_3BP/'
-        env.t_step_integr = 1e-3
-        env.t_step_bridge = 1e-3
-
-        run_bridge_vs_no_bridge(env, seed, steps)
-        plot_bridge_vs_no_bridge(env, steps)
-    
-    elif experiment == 3: # run bridged vs not bridged for 3 particles with planets
-        steps = 100
-
-        # particles 4 and 5 are the planets around
-        env = ThreeBody_env()
-        env.settings['Integration']['n_bodies'] = 3 # overwrite to 3 bodies
-        env.subfolder = '3_runBridgedvsNobridge_planetary/'
-        env.bodies_inner = [0, 0, 2]
-
-        # run_bridge_vs_no_bridge(env, seed, steps)
-        plot_bridge_vs_no_bridge(env, steps)
 
 
 
