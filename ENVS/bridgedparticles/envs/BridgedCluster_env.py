@@ -152,9 +152,9 @@ class BridgedCluster_env(gym.Env):
             if steps == None:
                 steps = self.settings['Integration']['max_steps']
             self.state = np.zeros((steps, self.n_bodies_total, 8)) # action, mass, rx3, vx3, 
-            self.cons = np.zeros((steps, 5)) # action, E, Lx3, 
+            self.cons = np.zeros((steps, 6)) # action, reward, E, Lx3, 
             self.comp_time = np.zeros(steps) # computation time
-            self._savestate(0, 0, particles_joined, 0.0, 0.0, 0.0) # save initial state
+            self._savestate(0, 0, particles_joined, 0.0, 0.0, 0.0, 0.0) # save initial state
 
         self.info_prev = [0.0, 0.0]
         return state_RL, self.info_prev
@@ -191,15 +191,13 @@ class BridgedCluster_env(gym.Env):
             
         # Get information for the reward
         info_error = self._get_info(particles_joined)
-        if self.save_state_to_file == True:
-            self._savestate(action, self.iteration, particles_joined, info_error[0], info_error[1], T) # save initial state
-        
-        # Information to evaluate
         state = self._get_state(particles_joined, info_error[0])
         reward = self._calculate_reward(info_error, self.info_prev, T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
-        self.reward = reward
         self.info_prev = info_error
-
+        
+        if self.save_state_to_file == True:
+            self._savestate(action, self.iteration, particles_joined, info_error[0], info_error[1], T, reward) # save initial state
+        
         # finish experiment if max number of iterations is reached
         if (abs(info_error[0]) > 1e-4) or self.iteration == self.settings['Integration']['max_steps']:
             terminated = True
@@ -351,7 +349,7 @@ class BridgedCluster_env(gym.Env):
                                  action, \
                                  reward))
             
-    def _savestate(self, action, step, particles, E, L, T):
+    def _savestate(self, action, step, particles, E, L, T, R):
         """
         _savestate: save state of the system to file
         INPUTS:
@@ -366,8 +364,9 @@ class BridgedCluster_env(gym.Env):
         self.state[step, :, 2:5] = particles.position.value_in(self.units_l)
         self.state[step, :, 5:] = particles.velocity.value_in(self.units_l/self.units_t)
         self.cons[step, 0] = action
-        self.cons[step, 1] = E
-        self.cons[step, 2:] = L
+        self.cons[step, 1] = R
+        self.cons[step, 2] = E
+        self.cons[step, 3:] = L
         self.comp_time[step-1] = T
 
         np.save(self.settings['Integration']['savefile'] + self.settings['Integration']['subfolder'] +\

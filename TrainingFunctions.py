@@ -58,7 +58,7 @@ class ReplayMemory(object):
     
 
 class DQN(nn.Module):
-    def __init__(self, n_observations, n_actions, settings = None, neurons = None, layers = None):
+    def __init__(self, n_observations, n_actions, neurons, layers):
         """
         DQN: creation of the networks
         INPUTS:
@@ -66,12 +66,8 @@ class DQN(nn.Module):
             n_actions: number of actions to use as output size
             settings: dictionary with specific network settings
         """
-        self.settings = settings
         super(DQN, self).__init__()
-        if neurons == None:
-            self.neurons = self.settings['Training']['neurons']
-        else:
-            self.neurons = int(neurons)
+        self.neurons = int(neurons)
         
         self.layer1 = nn.Linear(n_observations, self.neurons)
         self.layer2 = nn.Linear(self.neurons, self.neurons)
@@ -154,7 +150,7 @@ def plot_durations(episode_rewards, episode, show_result=False):
         plt.savefig('./SympleIntegration_training/reward_progress_%i'%episode)
 
 
-def load_reward(a):
+def load_reward(a, suffix = ''):
     """
     load_reward: load rewards from file 
     INPUTS:
@@ -165,7 +161,7 @@ def load_reward(a):
         HuberLoss: huber loss
     """
     score = []
-    with open(a.settings['Training']['savemodel'] + "rewards.txt", "r") as f:
+    with open(a.settings['Training']['savemodel'] + suffix + "rewards.txt", "r") as f:
         # for line in f:
         for y in f.read().split('\n'):
             score_r = list()
@@ -174,7 +170,7 @@ def load_reward(a):
             score.append(score_r)
 
     EnergyE = []
-    with open(a.settings['Training']['savemodel'] + "EnergyError.txt", "r") as f:
+    with open(a.settings['Training']['savemodel'] + suffix + "EnergyError.txt", "r") as f:
         # for line in f:
         for y in f.read().split('\n'):
             Energy_r = list()
