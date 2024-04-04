@@ -21,20 +21,19 @@ from TrainingFunctions import DQN, \
                             optimize_model
 from TestTrainedModel import plot_trajs
 from  ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
-from PlotsFunctions import load_state_files, plot_planets_trajectory, \
-                            run_trajectory, plot_evolution, calculate_errors
+from TestEnvironment import load_state_files, run_trajectory
 
 
 
 def train_sample(x, f_args):
-    path_model, settings, EA_iter, ind = f_args
+    env, EA_iter, ind = f_args
     max_iter = int(x[0])
     layers = int(x[1])
     neurons = int(x[2])
     LR = x[3]
     print("Parameters", x)
 
-    env = gym.make('bridgedparticles:ThreeBody-v0') # create the env once it's been registered
+    # env = gym.make('bridgedparticles:ThreeBody-v0') # create the env once it's been registered
 
     # if GPU is to be used
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,27 +44,25 @@ def train_sample(x, f_args):
         from IPython import display
 
     # TRAINING settings
-    BATCH_SIZE = settings['Training']['batch_size'] # number of transitions sampled from the replay buffer
-    GAMMA = settings['Training']['gamma'] # discount factor
-    EPS_START = settings['Training']['eps_start'] # starting value of epsilon
-    EPS_END = settings['Training']['eps_end'] # final value of epsilon
-    EPS_DECAY = settings['Training']['eps_decay'] # controls the rate of exponential decay of epsilon, higher means a slower decay
-    TAU = settings['Training']['tau'] # update rate of the target network
+    BATCH_SIZE = env.settings['Training']['batch_size'] # number of transitions sampled from the replay buffer
+    GAMMA = env.settings['Training']['gamma'] # discount factor
+    EPS_START = env.settings['Training']['eps_start'] # starting value of epsilon
+    EPS_END = env.settings['Training']['eps_end'] # final value of epsilon
+    EPS_DECAY = env.settings['Training']['eps_decay'] # controls the rate of exponential decay of epsilon, higher means a slower decay
+    TAU = env.settings['Training']['tau'] # update rate of the target network
+    env.settings['Integration']['savestate'] = False
     # LR = settings['Training']['lr'] # learning rate of the ``AdamW`` optimizer
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
+    n_observations = env.observation_space.n # TODO: test
 
     # Get the number of state observations
-    env.save_state_to_file = False
-    state, info = env.reset()
     n_observations = len(state)
 
     # Create nets
-    policy_net = DQN(n_observations, n_actions, settings = settings, \
-                     neurons = neurons, layers = layers).to(device)
-    target_net = DQN(n_observations, n_actions, settings = settings, \
-                     neurons = neurons, layers = layers).to(device)
+    policy_net = DQN(n_observations, n_actions, neurons, layers).to(device)
+    target_net = DQN(n_observations, n_actions, neurons, layers).to(device)
     target_net.load_state_dict(policy_net.state_dict())
 
     Transition = namedtuple('Transition',
@@ -74,22 +71,23 @@ def train_sample(x, f_args):
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
     memory = ReplayMemory(10000, Transition = Transition)
 
-    steps_done = 0 # counter of the number of steps
+    state, info = env.reset()
+    env.settings['Training']['savemodel'] = "./Training_Results/hyperparam_optim/"
+    env.settings['Training']['display'] = False
+
+    episode_number = 0 # counter of the number of steps
 
     # lists to save training progress
-    episode_rewards = [] # list of rewards per episode
     save_reward = list()
     save_EnergyE = list()
     save_huberloss = list()
 
     # Training loop
-    for i_episode in range(max_iter):
-        print("EA episode: %i, individual: %i,  Training episode: %i/%i"%(EA_iter, ind,  i_episode, max_iter))
+    while episode_number <= max_iter:
+        print("EA episode: %i, individual: %i,  Training episode: %i/%i"%(EA_iter, ind,  episode_number, max_iter))
 
         # Initialize the environment and get it's state
-        state, info = env.reset(save_state = False)
-        env.settings['Training']['display'] = False
-        env.settings['Training']['savemodel'] = "./Training_Results/hyperparam_optim/"
+        state, info = env.reset()
 
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         save_reward_list = list()
@@ -100,7 +98,8 @@ def train_sample(x, f_args):
         action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, steps_done)
         observation, reward_p, terminated, info = env.step(action.item())
 
-        for t in range(settings['Integration']['max_steps']-1):
+        terminated = False
+        while terminated == False:
             # Take a step
             action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, steps_done)
             observation, reward_p, terminated, info = env.step(action.item())
@@ -137,17 +136,18 @@ def train_sample(x, f_args):
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
 
-            episode_rewards.append(reward_p)
             if terminated:
                 break
+
+        episode_number += 1
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)
         save_huberloss.append(save_huberloss_list)
         
         # if i_episode > 0 and (i_episode %100 == 0 or i_episode == (max_iter - 1)):
-        if i_episode == (max_iter - 1):
-            torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +str(EA_iter) +'_'+str(ind)+'_model_weights'+str(i_episode)+'.pth') # save model
+        if episode_number == (max_iter - 1):
+            torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +str(EA_iter) +'_'+str(ind)+'_model_weights'+str(episode_number)+'.pth') # save model
 
             with open(env.settings['Training']['savemodel']+"rewards.txt", "w") as f:
                 for ss in save_reward:
@@ -319,12 +319,12 @@ if __name__ == '__main__':
     typex = ['int', 'int', 'int', 'log']
     f_args = [path_model, settings]
 
-    # x_minVal, lastMin = EvolAlgorithm(train_sample, bnds_list, x_add = f_args, \
-    #                 typex = typex, bulk_fitness = False,\
-    #                 ind = ind, max_iter = m_iter, 
-    #                 path_save = path_model)
-    # print("X min", x_minVal)
-    # print('Min', lastMin)
+    x_minVal, lastMin = EvolAlgorithm(train_sample, bnds_list, x_add = f_args, \
+                    typex = typex, bulk_fitness = False,\
+                    ind = ind, max_iter = m_iter, 
+                    path_save = path_model)
+    print("X min", x_minVal)
+    print('Min', lastMin)
 
-    # plot_results("./Training_Results/hyperparam_optim/evol_population.csv", ind, m_iter)
+    plot_results("./Training_Results/hyperparam_optim/evol_population.csv", ind, m_iter)
     test_results("./Training_Results/hyperparam_optim/", ind, m_iter)

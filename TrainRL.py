@@ -92,7 +92,6 @@ def train_net(env = None, suffix = ''):
 
     # Training loop
     while episode_number <= env.settings['Training']['max_episodes']:
-        episode_number += 1
         print("Training episode: %i/"%episode_number)
 
         # Initialize the environment and get it's state
@@ -145,8 +144,11 @@ def train_net(env = None, suffix = ''):
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
 
+
             if terminated:
                 break
+
+        episode_number += 1
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)

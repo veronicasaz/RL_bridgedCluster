@@ -196,6 +196,7 @@ def plot_reward(a, reward, Eerror, HuberLoss):
 
     steps_perepisode = np.zeros(episodes)
     cumul_reward_perepisode = np.zeros(episodes)
+    avg_reward_perepisode = np.zeros(episodes)
     last_energy_perepisode = np.zeros(episodes)
     reward_flat = list()
     energyerror_flat = list()
@@ -205,6 +206,7 @@ def plot_reward(a, reward, Eerror, HuberLoss):
     for i in range(episodes):
         steps_perepisode[i] = len(reward[i])
         cumul_reward_perepisode[i] = sum(reward[i])
+        avg_reward_perepisode[i] = np.mean(reward[i])
         reward_flat = reward_flat + reward[i][1:]
         try:
             last_energy_perepisode[i] = abs(Eerror[i][-1])
