@@ -22,9 +22,11 @@ from amuse.community.hermite.interface import Hermite
 from amuse.community.ph4.interface import ph4
 from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
-from amuse.lab import Particles
-from amuse.couple import bridge
-from amuse.ext.orbital_elements import  generate_binaries
+from amuse.community.fractalcluster.interface import new_fractal_cluster_model
+from amuse.lab import Particles, new_powerlaw_mass_distribution
+from amuse.ext.bridge import bridge
+from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
+from amuse.ic import make_planets_oligarch
 
 def plot_state(bodies):
     v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
@@ -44,6 +46,23 @@ def load_json(filepath):
     jsonFile.close()
     return data
 
+def get_orbital_elements_of_planetary_system(star, planets):
+    total_masses = planets.mass + star.mass
+    rel_pos = planets.position-star.position
+    rel_vel = planets.velocity-star.velocity
+    sma, ecc, true_anomaly,\
+        inc, long_asc_node, arg_per_mat =\
+            get_orbital_elements_from_arrays(rel_pos,
+                                             rel_vel,
+                                             total_masses,
+                                             G=constants.G)
+    planets.semimajor_axis = sma
+    planets.eccentricity = ecc
+    planets.inclination = inc
+
+    planets = planets[np.isnan(planets.eccentricity)]
+    planets.eccentricity = 10
+    planets.semimajor_axis = 1.e+10 | units.au
 
 class BridgedCluster_env(gym.Env):
     def __init__(self, render_mode = None):
@@ -65,36 +84,95 @@ class BridgedCluster_env(gym.Env):
             
         # ACTION
         # From a range of paramters
-        if self.settings['Integration']['action'] == 'range':
-            low = self.settings['Integration']['t_step_bridge'][0]
-            high = self.settings['Integration']['t_step_bridge'][-1]
-            n_actions = self.settings['Integration']['number_actions']
+        if self.settings['RL']['action'] == 'range':
+            low = self.settings['RL']['range_action'][0]
+            high = self.settings['RL']['range_action'][-1]
+            n_actions = self.settings['RL']['number_actions']
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
-        elif self.settings['Integration']['action'] == 'combinations':
-            low = self.settings['Integration']['t_step_bridge'][0]
-            high = self.settings['Integration']['t_step_bridge'][-1]
-            n_actions = self.settings['Integration']['number_actions']
-            actions_1 = np.logspace(np.log10(low), np.log10(high), \
-                                       num = n_actions, base = 10,
-                                       endpoint = True)
-            low = self.settings['Integration']['t_step_integr'][0]
-            high = self.settings['Integration']['t_step_integr'][-1]
-            n_actions = self.settings['Integration']['number_actions']
-            actions_2 = np.logspace(np.log10(low), np.log10(high), \
-                                       num = n_actions, base = 10,
-                                       endpoint = True)
-            comb = np.meshgrid(actions_1, actions_2)
-            self.actions = np.zeros((len(actions_1)* len(actions_2), 2))
-            self.actions[:, 0] = comb[0].flatten() # bridge, tstep param
-            self.actions[:, 1] = comb[1].flatten()
+        # elif self.settings['RL']['action'] == 'combinations':
+        #     low = self.settings['RL']['range_action'][0]
+        #     high = self.settings['RL']['range_action'][-1]
+        #     n_actions = self.settings['RL']['number_actions']
+        #     actions_1 = np.logspace(np.log10(low), np.log10(high), \
+        #                                num = n_actions, base = 10,
+        #                                endpoint = True)
+        #     low = self.settings['Integration']['t_step_integr'][0]
+        #     high = self.settings['Integration']['t_step_integr'][-1]
+        #     n_actions = self.settings['RL']['number_actions']
+        #     actions_2 = np.logspace(np.log10(low), np.log10(high), \
+        #                                num = n_actions, base = 10,
+        #                                endpoint = True)
+        #     comb = np.meshgrid(actions_1, actions_2)
+        #     self.actions = np.zeros((len(actions_1)* len(actions_2), 2))
+        #     self.actions[:, 0] = comb[0].flatten() # bridge, tstep param
+        #     self.actions[:, 1] = comb[1].flatten()
 
         
         self.action_space = gym.spaces.Discrete(len(self.actions)) 
 
         # Training parameters
-        self.W = self.settings['Training']['weights']
+        self.W = self.settings['RL']['weights']
+
+    def _initial_conditions_bridge(self):
+        np.random.seed(seed = self.settings['InitialConditions']['seed'])
+
+        #################################
+        # Stars
+        masses = new_powerlaw_mass_distribution(self.settings['InitialConditions']['n_bodies'],
+                                            self.settings['InitialConditions']['ranges_mass'][0] |units.MSun,
+                                            self.settings['InitialConditions']['ranges_mass'][1] |units.MSun, -2.35)
+        Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
+        self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
+        #stars=new_plummer_model(N,convert_nbody=converter)
+        stars = new_fractal_cluster_model(self.settings['InitialConditions']['n_bodies'],
+                                        fractal_dimension=1.6,
+                                        convert_nbody=self.converter,
+                                        random_seed = self.settings['InitialConditions']['seed'])
+        stars.mass = masses
+        stars.name = "star"
+        stars.type = "star"
+        stars.move_to_center()
+        stars.scale_to_standard(self.converter, virial_ratio = self.settings['InitialConditions']['virial_ratio'])
+
+        #################################
+        # Star to get planets
+        # sun = stars.random_sample(1)[0]
+        sun = stars[0]
+        sun.name = "Sun"
+        stars -= sun
+
+        #################################
+        # Planetary system
+        inner_radius_disk = self.settings['InitialConditions']['disk_radius'][0] | units.au
+        outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1]  |units.au/np.sqrt(sun.mass.value_in(units.MSun))
+        mass_disk = self.settings['InitialConditions']['mass_disk'] *sun.mass
+        ps = make_planets_oligarch.new_system(sun.mass,
+                                            sun.radius,
+                                            inner_radius_disk,
+                                            outer_radius_disk,
+                                            mass_disk)
+
+        planets = ps.planets[0]
+        planets.name = "planet"
+        planets.type = "planet"
+        planets.position += sun.position
+        planets.velocity += sun.velocity
+
+        planetary_system = Particles()
+        planetary_system.add_particles(planets)
+        planetary_system.add_particle(sun)
+
+        #################################
+        # All together
+        cluster = Particles()
+        cluster.add_particles(stars)
+        cluster.add_particle(sun)
+        cluster.add_particles(planets)
+        print(cluster)
+
+        return stars, planetary_system, cluster
 
     ## BASIC FUNCTIONS
     def reset(self):
@@ -109,52 +187,55 @@ class BridgedCluster_env(gym.Env):
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
         """
-
         # Select units
         self.units()
 
-        # TODO: CHECK FROM HERE DEPENDING ON SCRIPT
         # Same time step for the integrators and the bridge
-        self.particles_global, self.particles_local = self._initial_conditions_bridge()
+        self.particles_global, self.particles_local, \
+            self.particles_joined = self._initial_conditions_bridge()
 
+        # TODO: tstep not implemented for now
         self.grav_global = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
         self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
         self.grav_global.particles.add_particles(self.particles_global)
         self.grav_local.particles.add_particles(self.particles_local)
             
         # Bridge creation
-        self.grav_bridge = bridge.Bridge(use_threading=False)
+        # self.grav_bridge = bridge.Bridge(verbose = False, use_threading=False)
+        self.grav_bridge = bridge(verbose = False, use_threading=False)
         self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
-        self.grav_bridge.timestep = self.actions[0] | self.units_time
 
-        self.channel = [self.grav_global.particles.new_channel_to(self.particles_global), \
-                        self.grav_local.particles.new_channel_to(self.particles_local)]
 
-        particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
-        self.n_bodies_total = len(particles_joined)
+        self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined), \
+                        self.grav_local.particles.new_channel_to(self.particles_joined)]
+
+        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
+        self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
-        self.E_0, self.L_0 = self._get_info(particles_joined, initial = True)
+        self.E_0, self.L_0 = self._get_info(self.particles_joined, initial = True)
 
         # Create state vector
-        state_RL = self._get_state(particles_joined, self.E_0) # |r_i|, |v_i|
+        state_RL = self._get_state(self.particles_joined, self.E_0) # |r_i|, |v_i|
+
+        # Initialize time
+        self.grav_bridge.timestep = self.actions[0] | self.units_time
+        self.check_step = self.settings['Integration']['check_step']
         self.iteration = 0
         self.t_cumul = 0.0 # cumulative time for integration
-        self.t0_comp = time.time()
 
         # Plot trajectory
         if self.settings['Integration']['plot'] == True:
-            plot_state(particles_joined)
+            plot_state(self.particles_joined)
 
         # Initialize variables to save simulation information
         if self.settings['Integration']['savestate'] == True:
-            if steps == None:
-                steps = self.settings['Integration']['max_steps']
-            self.state = np.zeros((steps, self.n_bodies_total, 8)) # action, mass, rx3, vx3, 
+            steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
+            self.state = np.zeros((steps, self.n_bodies_total, 9)) # action, mass, rx3, vx3, name
             self.cons = np.zeros((steps, 6)) # action, reward, E, Lx3, 
             self.comp_time = np.zeros(steps) # computation time
-            self._savestate(0, 0, particles_joined, 0.0, 0.0, 0.0, 0.0) # save initial state
+            self._savestate(0, 0, self.particles_joined, 0.0, 0.0, 0.0, 0.0) # save initial state
 
         self.info_prev = [0.0, 0.0]
         return state_RL, self.info_prev
@@ -170,36 +251,36 @@ class BridgedCluster_env(gym.Env):
             terminated: True or False, whether to stop the simulation
             info: additional info to pass to the RL algorithm
         """
-
-        check_step = self.settings['Integration']['check_step'] # final time for step integration
         self.iteration += 1
-        self.t_cumul += check_step # add the previous simulation time
+        self.t_cumul += self.check_step # add the previous simulation time
         t = (self.t_cumul) | self.units_time
 
         # Apply action
-        self.grav_bridge.timestep = self.actions[action] | self.units_time
+        # self.grav_bridge.timestep = self.actions[action] | self.units_time
 
         # Integrate
         t0_step = time.time()
-        self.grav_bridge.evolve_model(t)
+        self.grav_bridge.evolve_model(t, timestep = self.actions[action] | self.units_time)
         T = time.time() - t0_step
 
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
-
-        particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
+        
+        # print("===================")
+        # print(self.particles_joined)
             
         # Get information for the reward
-        info_error = self._get_info(particles_joined)
-        state = self._get_state(particles_joined, info_error[0])
+        info_error = self._get_info(self.particles_joined)
+        state = self._get_state(self.particles_joined, info_error[0])
         reward = self._calculate_reward(info_error, self.info_prev, T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
         
-        if self.save_state_to_file == True:
-            self._savestate(action, self.iteration, particles_joined, info_error[0], info_error[1], T, reward) # save initial state
+        if self.settings['Integration']['savestate'] == True:
+            self._savestate(action, self.iteration, self.particles_joined, info_error[0], info_error[1], T, reward) # save initial state
         
         # finish experiment if max number of iterations is reached
-        if (abs(info_error[0]) > 1e-4) or self.iteration == self.settings['Integration']['max_steps']:
+        if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
+              self.iteration == self.settings['Integration']['max_steps']:
             terminated = True
         else:
             terminated = False
@@ -210,7 +291,7 @@ class BridgedCluster_env(gym.Env):
 
         # Plot trajectory
         if self.settings['Integration']['plot'] == True and terminated == True:
-            plot_state(particles_joined)
+            plot_state(self.particles_joined)
 
         info = dict()
         info['TimeLimit.truncated'] = False
@@ -218,8 +299,32 @@ class BridgedCluster_env(gym.Env):
 
         return state, reward, terminated, info
     
-    
+    def close(self):
+        self.grav_global.stop()
+        self.grav_local.stop()
+
     ## ADDITIONAL FUNCTIONS NEEDED
+    def units(self):
+        # Choose set of units for the problem
+        if self.settings['InitialConditions']['units'] == 'si':
+            self.G = constants.G
+            self.units_G = units.m**3 * units.kg**(-1) * units.s**(-2)
+            self.units_energy = units.m**2 * units.s**(-2)* units.kg
+            self.units_time = units.Myr
+
+            self.units_t = units.s 
+            self.units_l = units.m
+            self.units_m = units.kg
+
+        elif self.settings['Integration']['units'] == 'nbody':
+            self.G = self.converter.to_nbody(constants.G)
+            self.units_G = nbody_system.length**3 * nbody_system.mass**(-1) * nbody_system.time**(-2)
+            self.units_energy = nbody_system.length**2 * nbody_system.time**(-2)* nbody_system.mass
+            self.units_time = self.converter.to_nbody(1 | units.yr)
+            self.units_t = nbody_system.time
+            self.units_l = nbody_system.length
+            self.units_m = nbody_system.mass
+
     def _join_particles_bridge(self, particles_vector):
         """
         _join_particles_bridge: put all particles into a particle set
@@ -253,19 +358,19 @@ class BridgedCluster_env(gym.Env):
                 g = Hermite()
             # Collision detection and softening
             # g.stopping_conditions.timeout_detection.enable()
-            g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2
+            # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2
         elif integrator_type == 'Ph4': 
             if self.settings['InitialConditions']['units'] == 'si':
-                g = ph4(self.converter)
+                g = ph4(self.converter, number_of_workers = 1)
             else:
                 g = ph4()
-            g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
+            # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
         elif integrator_type == 'Huayno': 
             if self.settings['InitialConditions']['units'] == 'si':
                 g = Huayno(self.converter)
             else:
                 g = Huayno()
-            g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
+            # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
         elif integrator_type == 'Symple': 
             if self.settings['InitialConditions']['units'] == 'si':
                 g = symple(self.converter, redirection ='none')
@@ -283,6 +388,7 @@ class BridgedCluster_env(gym.Env):
         """
         E_kin = particles.kinetic_energy().value_in(self.units_energy)
         E_pot = particles.potential_energy(G = self.G).value_in(self.units_energy)
+        
         L = self.calculate_angular_m(particles)
         if initial == True:
             return E_kin + E_pot, L
@@ -307,21 +413,21 @@ class BridgedCluster_env(gym.Env):
         particles_v_nbody = self.converter.to_generic(particles.velocity).value_in(nbody_system.length/nbody_system.time)
         particles_m_nbody = self.converter.to_generic(particles.mass).value_in(nbody_system.mass)
 
-        if self.settings['Integration']['state'] == 'norm':
+        if self.settings['RL']['state'] == 'norm':
             state = np.zeros((self.n_bodies)*3) # m, norm r, norm v
 
             state[0:self.n_bodies] = particles_m_nbody
             state[self.n_bodies: 2*self.n_bodies]  = np.linalg.norm(particles_p_nbody, axis = 1)
             state[2*self.n_bodies: 3*self.n_bodies] = np.linalg.norm(particles_v_nbody, axis = 1)
        
-        elif self.settings['Integration']['state'] == 'cart':
+        elif self.settings['RL']['state'] == 'cart':
             state = np.zeros((self.n_bodies)*4+1) # all r, all v
             for i in range(self.n_bodies):
                 state[2*i:2*i+2] = particles_p_nbody[i, 0:2]/10 # convert to 2D. Divide by 10 to same order as v
                 state[2*self.n_bodies + 2*i: 2*self.n_bodies + 2*i+2] = particles_v_nbody[i, 0:2]
                 state[-1] = -np.log10(abs(E))
         
-        elif self.settings['Integration']['state'] == 'dist':
+        elif self.settings['RL']['state'] == 'dist':
             state = np.zeros((self.n_bodies)*2) # dist r, dist v
 
             counter = 0
@@ -334,7 +440,56 @@ class BridgedCluster_env(gym.Env):
             state[-1] = -np.log10(abs(E))
 
         return state
+    
+    def _calculate_reward(self, info, info_prev, T, action, W):
+        """
+        _calculate_reward: calculate the reward associated to a step
+        INPUTS:
+            info: energy error and change of angular momentum of iteration i
+            info_prev: energy error and change of angular momentum of iteration i-1
+            T: clock computation time
+            action: action taken. Integer value
+            W: weights for the terms in the reward function
+        OUTPUTS:
+            a: reward value
+        """
+        Delta_E, Delta_O = info
+        Delta_E_prev, Delta_O_prev = info_prev
 
+        if Delta_E_prev == 0.0: # for the initial step
+            return 0
+        else:
+            if self.settings['RL']['reward_f'] == 0:
+                a = -(W[0]* np.log10(abs(Delta_E)) + \
+                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
+                        (W[2]*1/abs(np.log10(action)) )
+                return a
+            
+            if self.settings['RL']['reward_f'] == 1:
+                a = -(W[0]* np.log10(abs(Delta_E)) + \
+                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
+                        (W[2]*1/abs(np.log10(action)))
+                return a
+            
+            elif self.settings['RL']['reward_f'] == 2:
+                a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
+                         abs(np.log10(abs(Delta_E)))**2 +\
+                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))))+\
+                         W[2]*1/abs(np.log10(action))
+                return a
+
+            elif self.settings['RL']['reward_f'] == 3:
+                a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
+                         abs(np.log10(abs(Delta_E)))**2 +\
+                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))))*\
+                         W[2]*1/abs(np.log10(action))
+                return a
+                
+            elif self.settings['RL']['reward_f'] == 4:
+                a = -W[0]*np.log10(abs(Delta_E)) + \
+                    W[2]/abs(np.log10(action))
+                return a
+    
     def _display_info(self, info, reward, action):
         """
         _display_info: display information at every step
@@ -362,7 +517,16 @@ class BridgedCluster_env(gym.Env):
         self.state[step, :, 0] = action
         self.state[step, :, 1] = particles.mass.value_in(self.units_m)
         self.state[step, :, 2:5] = particles.position.value_in(self.units_l)
-        self.state[step, :, 5:] = particles.velocity.value_in(self.units_l/self.units_t)
+        self.state[step, :, 5:8] = particles.velocity.value_in(self.units_l/self.units_t)
+
+        particles_name_code = []
+        for i in range(len(particles)):
+            if particles[i].name == 'star':
+                particles_name_code.append(0)
+            else:
+                particles_name_code.append(1)
+
+        self.state[step, :, 8] = particles_name_code
         self.cons[step, 0] = action
         self.cons[step, 1] = R
         self.cons[step, 2] = E

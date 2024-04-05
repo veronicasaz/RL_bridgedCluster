@@ -34,8 +34,8 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
     """
     n_planets = np.shape(state)[1]
     for j in range(n_planets):
-        x = state[0:steps, j, 2]
-        y = state[0:steps, j, 3]
+        x = state[0:steps, j, 2]/1.496e11
+        y = state[0:steps, j, 3]/1.496e11
         m = state[0, j, 1]
         size_marker = np.log10(m)/10
 
@@ -50,6 +50,44 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         
         ax.scatter(x[1:], y[1:], marker = marker, s = size_marker, \
                     c = colors[j%len(colors)])        
+        
+    if legend_on == True:
+        ax.legend(fontsize = labelsize)
+    if axislabel_on == True:
+        ax.set_xlabel('x (au)', fontsize = labelsize)
+        ax.set_ylabel('y (au)', fontsize = labelsize)
+
+def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
+                            legend_on = True, axislabel_on = True, marker = 'o'):
+    """
+    plot_planets_trajectory: plot trajectory of three bodies
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+        legend_on: True or False to display the legend
+    """
+    n_planets = np.shape(state)[1]
+    for j in range(n_planets):
+        if state[0, j, -1] == 1:
+            x = state[0:steps, j, 2]/1.496e11
+            y = state[0:steps, j, 3]/1.496e11
+            m = state[0, j, 1]
+            size_marker = np.log10(m)/10
+
+            ax.scatter(x[0], y[0], s = 20*size_marker,\
+                    c = colors[j%len(colors)], \
+                        label = "Particle "+ name_planets[j])
+            ax.plot(x[1:], y[1:], marker = None, 
+                        markersize = size_marker, \
+                        linestyle = '-',\
+                        color = colors[j%len(colors)], \
+                        alpha = 0.1)
+            
+            ax.scatter(x[1:], y[1:], marker = marker, s = size_marker, \
+                        c = colors[j%len(colors)])        
         
     if legend_on == True:
         ax.legend(fontsize = labelsize)

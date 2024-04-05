@@ -15,7 +15,8 @@ from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
 from ENVS.bridgedparticles.envs.BridgedCluster_env import BridgedCluster_env
 from TrainingFunctions import DQN
 
-from PlotsFunctions import plot_planets_trajectory, plot_evolution
+from PlotsFunctions import plot_planets_trajectory, plot_planetary_system_trajectory, \
+    plot_evolution
 
 
 def run_trajectory(env, action = 'RL', model_path = None):
@@ -39,6 +40,7 @@ def run_trajectory(env, action = 'RL', model_path = None):
         
     state, info = env.reset()
     i = 0
+    terminated = False
 
     # Case 1: use trained RL algorithm
     if action == 'RL':
@@ -89,7 +91,7 @@ def load_state_files(env, namefile = None):
 
 def calculate_errors(states, cons, tcomp):
     cases = len(states)
-    steps = np.shape(cons[0][:, 0])
+    steps = np.shape(cons[0][:, 0])[0]
 
     # Calculate the energy errors
     E_E = np.zeros((steps, cases))
@@ -107,7 +109,7 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
     fig = plt.figure(figsize = (10,10))
-    gs1 = matplotlib.gridspec.GridSpec(3, 2, width_ratios=[1]*len(STATES), 
+    gs1 = matplotlib.gridspec.GridSpec(4, 2, 
                                     left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
                                     top = 0.9, bottom = 0.07)
     
@@ -118,23 +120,26 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     plot_traj_index = [0, len(STATES)-1] # plot best and worst
     for case in plot_traj_index: 
         ax1 = fig.add_subplot(gs1[0, case])
-        plot_planets_trajectory(ax1, STATES[case]/1.496e11, name_bodies, \
-                            labelsize=label_size, steps = steps, legend_on = False)
+        ax12 = fig.add_subplot(gs1[1, case])
+        plot_planets_trajectory(ax1, STATES[case], name_bodies, \
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
+        plot_planetary_system_trajectory(ax12, STATES[case], name_bodies, \
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
         ax1.set_title(Titles[case], fontsize = label_size + 2)
         ax1.set_xlabel('x (au)', fontsize = label_size)
         ax1.set_ylabel('y (au)', fontsize = label_size)
-        if case == 1: 
+        # if case == 1: 
             # legend = False
-            ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.5), \
-                       fancybox = True, ncol = 3, fontsize = label_size-2)
+            # ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.5), \
+                    #    fancybox = True, ncol = 3, fontsize = label_size-2)
         
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
     Energy_error, T_comp = calculate_errors(STATES, CONS, TCOMP)
-    x_axis = np.arange(1, np.shape(T_comp), 1)
-    ax2 = fig.add_subplot(gs1[1, :])
-    ax3 = fig.add_subplot(gs1[2, :])
+    x_axis = np.arange(1, len(T_comp), 1)
+    ax2 = fig.add_subplot(gs1[2, :])
+    ax3 = fig.add_subplot(gs1[3, :])
     for case in range(len(STATES)):
         plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case], \
                        colorindex = case, linestyle = linestyle[case])
@@ -162,6 +167,7 @@ if __name__ == '__main__':
 
         NAMES = []
         for act in range(env.settings['RL']['number_actions']):
+        # for act in range(1): #TODO: eliminate to do for all
             NAMES.append('action'+ str(env.actions[act]))
             env.settings['Integration']['suffix'] = NAMES[act]
             run_trajectory(env, action = act)
@@ -170,6 +176,7 @@ if __name__ == '__main__':
         CONS = []
         TCOMP = []
         for act in range(env.settings['RL']['number_actions']):
+        # for act in range(1):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)
@@ -179,7 +186,6 @@ if __name__ == '__main__':
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison.png'
         plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
-
     
     elif experiment == 2: # test different initializations
         env = BridgedCluster_env()

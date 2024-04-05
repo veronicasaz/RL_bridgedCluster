@@ -2,24 +2,13 @@
     "InitialConditions":
     {
        "units": "si",
-       "seed": "1",
-       "n_bodies": 3, 
-       "n_bodies_inner": [0, 0, 2],
-       "ranges_coords": {
-		  "x1": [5.0, 10.0],
-		  "y1": [0.0, 10.0],
-		  "x2": [-5.0, -10.0],
-		  "y2": [5.0, 15.0]
-	       },
-	"ranges_inner": {
-	  "m": [1e-5, 1e-4],
-	  "a": [1, 2], 
-	  "e": [0.1, 0.5], 
-	  "i": [0.0, 10],
-	  "omega": [0, 360] ,
-	  "Omega": [0, 360],
-	  "TA": [0, 360]
-	   }
+       "seed": 1,
+       "n_bodies": 10, 
+       "ranges_mass": [1, 100],
+       "radius_cluster": 1,
+ 	"virial_ratio": 0.3,
+	"disk_radius": [5, 50],
+	"mass_disk": 0.02
     },
     "Integration":
     {
@@ -27,21 +16,22 @@
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 150,
-        "check_step": 0.1, 
+        "max_steps": 10,
+        "check_step": 1.0, 
         "t_step_global": 1e-3,
         "t_step_local": 1e-3,
-        "integrator_global": "Hermite",
-        "integrator_local": "Hermite",
+        "integrator_global": "Ph4",
+        "integrator_local": "Huayno",
+        "max_error_accepted": 1e-1,
         "plot": false
     },
     "RL":
     {
         "state": "cart",
         "state_options_info": ["norm", "cart", "dist"],
-        "action": "combinations", 
-        "number_actions": 4,
-	"range_action": [1e-5, 1e-2],
+        "action": "range", 
+        "number_actions": 2,
+	"range_action": [1e-2, 1e-1],
 	"reward_f": 0,
         "weights": [10.0, 50.0, 0.1]
      },
