@@ -15,7 +15,7 @@ import torch
 import torchvision.models as models
 import gym
 
-from ENVS.bridgedparticles.envs.BridgedCluster_env import BridgedCluster_env
+from env.BridgedCluster_env import Cluster_env
 from TrainRL import train_net
 from TrainingFunctions import DQN, load_reward, plot_reward
 from TestEnvironment import run_trajectory, load_state_files, plot_trajs
@@ -28,7 +28,7 @@ colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
 
         
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 1 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
@@ -36,14 +36,14 @@ if __name__ == '__main__':
 
     elif experiment == 1:
         # Plot training results
-        env = BridgedCluster_env()
+        env = Cluster_env()
         reward, EnergyError, HuberLoss = load_reward(env, suffix = '')
         plot_reward(env, reward, EnergyError, HuberLoss)
         
     elif experiment == 2 or experiment == 3:
         # 2: use network trained with hyperparameters chosen by hand
         # 3: use network found by hyperparameter optimization for comparison
-        env = BridgedCluster_env()
+        env = Cluster_env()
         if experiment == 2:
             env.settings['Integration']['subfolder'] = '4_run_RL_base/'
         else:

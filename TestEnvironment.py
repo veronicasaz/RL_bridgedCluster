@@ -10,9 +10,8 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 
-from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
-from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
-from ENVS.bridgedparticles.envs.BridgedCluster_env import Cluster_env
+from env.BridgedCluster_env import Cluster_env
+
 from TrainingFunctions import DQN
 
 from PlotsFunctions import plot_planets_trajectory, plot_planetary_system_trajectory, \
@@ -167,13 +166,13 @@ if __name__ == '__main__':
     experiment = 1 # number of the experiment to be run
             
     if experiment == 1: # run bridge for all actions
-        env = BridgedCluster_env()
+        env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions/'
 
         NAMES = []
         # for act in range(1):
         for act in range(env.settings['RL']['number_actions']):
-            NAMES.append('action%E'%str(env.actions[act]))
+            NAMES.append('action%.2E'%env.actions[act])
             env.settings['Integration']['suffix'] = NAMES[act]
             run_trajectory(env, action = act)
 
@@ -193,7 +192,7 @@ if __name__ == '__main__':
         plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
     
     elif experiment == 2: # test different initializations
-        env = BridgedCluster_env()
+        env = Cluster_env()
         env.settings['Integration']['subfolder'] = '2_run_initializations/'
 
         NAMES = []

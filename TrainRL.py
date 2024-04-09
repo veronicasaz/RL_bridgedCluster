@@ -14,6 +14,7 @@ from IPython.display import clear_output
 
 import gym
 import torch
+import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -34,7 +35,8 @@ def train_net(env = None, suffix = ''):
     # Environment
     if env == None:
         # env = gym.make('bridgedparticles:ThreeBody-v0') # create the env once it's been registered
-        env = gym.make('bridgedparticles:BS-v0') # create the env once it's been registered
+        import env
+        env = gym.make('Cluster_env-v0')
 
     # if GPU is to be used
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,8 +64,7 @@ def train_net(env = None, suffix = ''):
     n_actions = env.action_space.n # TODO: test
 
     # Get the number of state observations
-    # n_observations = len(env.observation_space) # TODO: test
-    n_observations = env.observation_space.n # TODO: test
+    n_observations = env.observation_space_n # TODO: test
 
     # Create nets
     policy_net = DQN(n_observations, n_actions, NEURONS, LAYERS).to(device)
@@ -82,7 +83,6 @@ def train_net(env = None, suffix = ''):
     else:
         num_episodes = 50
 
-    state, info = env.reset()
     episode_number = 0 # counter of the number of steps
 
     # lists to save training progress
@@ -92,9 +92,10 @@ def train_net(env = None, suffix = ''):
 
     # Training loop
     while episode_number <= env.settings['Training']['max_episodes']:
-        print("Training episode: %i/"%episode_number)
+        print("Training episode: %i/%i"%(episode_number, env.settings['Training']['max_episodes']))
 
         # Initialize the environment and get it's state
+        env.settings['InitialConditions']['seed'] = np.random.randint(1000) # make initial conditions vary
         state, info = env.reset()
 
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
@@ -103,7 +104,7 @@ def train_net(env = None, suffix = ''):
         save_huberloss_list = list()
 
         # Do first step without updating the networks and with the best step
-        action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, steps_done)
+        action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, 0)
         observation, reward_p, terminated, info = env.step(action.item())
 
         terminated = False
@@ -144,11 +145,8 @@ def train_net(env = None, suffix = ''):
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
 
+        env.close()
 
-            if terminated:
-                break
-
-        episode_number += 1
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)
@@ -177,6 +175,8 @@ def train_net(env = None, suffix = ''):
                 for s in ss:
                     f.write(str(s) +" ")
                 f.write("\n")
+
+        episode_number += 1
 
     env.close()
     print('Complete')
