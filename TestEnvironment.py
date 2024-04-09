@@ -12,7 +12,7 @@ import torch
 
 from ENVS.bridgedparticles.envs.Bridged2Body_env import TwoBody_env
 from ENVS.bridgedparticles.envs.Bridged3Body_env import ThreeBody_env
-from ENVS.bridgedparticles.envs.BridgedCluster_env import BridgedCluster_env
+from ENVS.bridgedparticles.envs.BridgedCluster_env import Cluster_env
 from TrainingFunctions import DQN
 
 from PlotsFunctions import plot_planets_trajectory, plot_planetary_system_trajectory, \
@@ -95,21 +95,20 @@ def calculate_errors(states, cons, tcomp):
 
     # Calculate the energy errors
     E_E = np.zeros((steps, cases))
-    E_M = np.zeros((steps, cases))
+    E_L = np.zeros((steps, cases))
     T_c = np.zeros((steps, cases))
     for i in range(cases):
         E_E[1:, i] = abs(cons[i][1:steps, 2]) # absolute relative energy error
-        E_M[1:, i] = np.linalg.norm((cons[i][1:steps, 3:] - cons[i][0:steps-1, 3:]), axis = 1) # relative angular momentum error    
+        E_L[1:, i] = abs(cons[i][1:steps, 3]) # absolute relative local energy error
         T_c[1:, i] = np.cumsum(tcomp[i][1:steps]) # add individual computation times
 
-    return E_E, T_c
-
+    return E_E, E_L, T_c
 
 def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
-    fig = plt.figure(figsize = (10,10))
-    gs1 = matplotlib.gridspec.GridSpec(4, 2, 
+    fig = plt.figure(figsize = (10,15))
+    gs1 = matplotlib.gridspec.GridSpec(5, 2, 
                                     left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
                                     top = 0.9, bottom = 0.07)
     
@@ -118,9 +117,9 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
     legend = True
     plot_traj_index = [0, len(STATES)-1] # plot best and worst
-    for case in plot_traj_index: 
-        ax1 = fig.add_subplot(gs1[0, case])
-        ax12 = fig.add_subplot(gs1[1, case])
+    for case_i, case in enumerate(plot_traj_index): 
+        ax1 = fig.add_subplot(gs1[0, case_i])
+        ax12 = fig.add_subplot(gs1[1, case_i])
         plot_planets_trajectory(ax1, STATES[case], name_bodies, \
                             labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
         plot_planetary_system_trajectory(ax12, STATES[case], name_bodies, \
@@ -128,31 +127,37 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
         ax1.set_title(Titles[case], fontsize = label_size + 2)
         ax1.set_xlabel('x (au)', fontsize = label_size)
         ax1.set_ylabel('y (au)', fontsize = label_size)
-        # if case == 1: 
-            # legend = False
-            # ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.5), \
-                    #    fancybox = True, ncol = 3, fontsize = label_size-2)
+        if case == 0: 
+            legend = False
+            ax1.legend(loc='upper center', bbox_to_anchor=(0.8, 1.7), \
+                       fancybox = True, ncol = 3, fontsize = label_size-2)
         
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, Energy_error_local, T_comp = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
     ax2 = fig.add_subplot(gs1[2, :])
     ax3 = fig.add_subplot(gs1[3, :])
+    ax4 = fig.add_subplot(gs1[4, :])
     for case in range(len(STATES)):
         plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case], \
                        colorindex = case, linestyle = linestyle[case])
-        plot_evolution(ax3, x_axis, T_comp[1:, case], label = Titles[case], \
+        plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case], \
                        colorindex = case, linestyle = linestyle[case])
-        ax2.set_xlabel('Step', fontsize = label_size)
-        ax3.set_xlabel('Step', fontsize = label_size)
-        ax2.set_ylabel('Energy Error', fontsize = label_size)
-        ax3.set_ylabel('Computation time (s)', fontsize = label_size)
+        plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle[case])
     
-    ax2.set_yscale('log')
-    ax3.set_yscale('log')
+    for ax in [ax2, ax3, ax4]:
+        ax.set_yscale('log')
 
+    ax4.set_xlabel('Step', fontsize = label_size)
+
+
+    ax2.set_ylabel('Energy Error', fontsize = label_size)
+    ax3.set_ylabel('Energy Error Local', fontsize = label_size)
+    ax4.set_ylabel('Computation time (s)', fontsize = label_size)
+    
     ax2.legend(fontsize = label_size -3)
 
     plt.savefig(save_path, dpi = 150)
@@ -166,17 +171,17 @@ if __name__ == '__main__':
         env.settings['Integration']['subfolder'] = '1_run_actions/'
 
         NAMES = []
+        # for act in range(1):
         for act in range(env.settings['RL']['number_actions']):
-        # for act in range(1): #TODO: eliminate to do for all
-            NAMES.append('action'+ str(env.actions[act]))
+            NAMES.append('action%E'%str(env.actions[act]))
             env.settings['Integration']['suffix'] = NAMES[act]
             run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
         TCOMP = []
-        for act in range(env.settings['RL']['number_actions']):
         # for act in range(1):
+        for act in range(env.settings['RL']['number_actions']):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)

@@ -64,7 +64,7 @@ def get_orbital_elements_of_planetary_system(star, planets):
     planets.eccentricity = 10
     planets.semimajor_axis = 1.e+10 | units.au
 
-class BridgedCluster_env(gym.Env):
+class Cluster_env(gym.Env):
     def __init__(self, render_mode = None):
         self.settings = load_json("./settings_integration_Cluster.json")
 
@@ -214,7 +214,7 @@ class BridgedCluster_env(gym.Env):
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
-        self.E_0, self.L_0 = self._get_info(self.particles_joined, initial = True)
+        self.E_0, self.E_0_local = self._get_info(self.particles_joined, self.grav_local.particles, initial = True)
 
         # Create state vector
         state_RL = self._get_state(self.particles_joined, self.E_0) # |r_i|, |v_i|
@@ -233,7 +233,7 @@ class BridgedCluster_env(gym.Env):
         if self.settings['Integration']['savestate'] == True:
             steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
             self.state = np.zeros((steps, self.n_bodies_total, 9)) # action, mass, rx3, vx3, name
-            self.cons = np.zeros((steps, 6)) # action, reward, E, Lx3, 
+            self.cons = np.zeros((steps, 4)) # action, reward, E, E_local 
             self.comp_time = np.zeros(steps) # computation time
             self._savestate(0, 0, self.particles_joined, 0.0, 0.0, 0.0, 0.0) # save initial state
 
@@ -270,7 +270,7 @@ class BridgedCluster_env(gym.Env):
         # print(self.particles_joined)
             
         # Get information for the reward
-        info_error = self._get_info(self.particles_joined)
+        info_error = self._get_info(self.particles_joined, self.grav_local.particles)
         state = self._get_state(self.particles_joined, info_error[0])
         reward = self._calculate_reward(info_error, self.info_prev, T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
@@ -380,7 +380,7 @@ class BridgedCluster_env(gym.Env):
             
         return g 
     
-    def _get_info(self, particles, initial = False): # change to include multiple energies
+    def _get_info(self, particles, particles_local, initial = False): # change to include multiple energies
         """
         _get_info: get energy error, angular momentum error at current state
         OUTPUTS:
@@ -388,14 +388,18 @@ class BridgedCluster_env(gym.Env):
         """
         E_kin = particles.kinetic_energy().value_in(self.units_energy)
         E_pot = particles.potential_energy(G = self.G).value_in(self.units_energy)
+
+        E_local = particles_local.kinetic_energy().value_in(self.units_energy) +\
+            particles_local.potential_energy(G = self.G).value_in(self.units_energy)
         
-        L = self.calculate_angular_m(particles)
+        # L = self.calculate_angular_m(particles)
         if initial == True:
-            return E_kin + E_pot, L
+            return E_kin + E_pot, E_local
         else:
             Delta_E = (E_kin + E_pot - self.E_0) / self.E_0
-            Delta_L = (L - self.L_0) / self.L_0
-            return Delta_E, Delta_L
+            Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
+            # Delta_L = (L - self.L_0) / self.L_0
+            return Delta_E, Delta_E_local
 
 
     def _get_state(self, particles, E):  # TODO: change to include all particles?
@@ -453,21 +457,21 @@ class BridgedCluster_env(gym.Env):
         OUTPUTS:
             a: reward value
         """
-        Delta_E, Delta_O = info
-        Delta_E_prev, Delta_O_prev = info_prev
+        Delta_E, Delta_E_local = info
+        Delta_E_prev, Delta_E_local_prev = info_prev
 
         if Delta_E_prev == 0.0: # for the initial step
             return 0
         else:
-            if self.settings['RL']['reward_f'] == 0:
+            if self.settings['RL']['reward_f'] == 0: # global energy and 1e-7 limit
                 a = -(W[0]* np.log10(abs(Delta_E)) + \
                          W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
                         (W[2]*1/abs(np.log10(action)) )
                 return a
             
             if self.settings['RL']['reward_f'] == 1:
-                a = -(W[0]* np.log10(abs(Delta_E)) + \
-                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
+                a = -(W[0]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
+                      W[1]*(np.log10(abs(Delta_E_local)))) +\
                         (W[2]*1/abs(np.log10(action)))
                 return a
             
@@ -504,7 +508,7 @@ class BridgedCluster_env(gym.Env):
                                  action, \
                                  reward))
             
-    def _savestate(self, action, step, particles, E, L, T, R):
+    def _savestate(self, action, step, particles, E, E_local, T, R):
         """
         _savestate: save state of the system to file
         INPUTS:
@@ -530,7 +534,7 @@ class BridgedCluster_env(gym.Env):
         self.cons[step, 0] = action
         self.cons[step, 1] = R
         self.cons[step, 2] = E
-        self.cons[step, 3:] = L
+        self.cons[step, 3] = E_local
         self.comp_time[step-1] = T
 
         np.save(self.settings['Integration']['savefile'] + self.settings['Integration']['subfolder'] +\
