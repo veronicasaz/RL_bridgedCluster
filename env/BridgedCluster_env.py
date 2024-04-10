@@ -281,6 +281,7 @@ class Cluster_env(gym.Env):
         # finish experiment if max number of iterations is reached
         if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
+            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False

@@ -3,11 +3,11 @@
     {
        "units": "si",
        "seed": 1,
-       "n_bodies": 10, 
+       "n_bodies": 5, 
        "ranges_mass": [1, 100],
-       "radius_cluster": 1,
+       "radius_cluster": 0.3,
  	"virial_ratio": 0.3,
-	"disk_radius": [5, 50],
+	"disk_radius": [10, 50],
 	"mass_disk": 0.02
     },
     "Integration":
@@ -16,8 +16,8 @@
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 10,
-        "check_step": 1.0, 
+        "max_steps": 100,
+        "check_step": 0.1, 
         "t_step_global": 1e-3,
         "t_step_local": 1e-3,
         "integrator_global": "Ph4",
@@ -30,10 +30,10 @@
         "state": "cart",
         "state_options_info": ["norm", "cart", "dist"],
         "action": "range", 
-        "number_actions": 2,
-	"range_action": [1e-2, 1e-1],
-	"reward_f": 0,
-        "weights": [10.0, 50.0, 0.1]
+        "number_actions": 4,
+	"range_action": [1e-4, 1e-1],
+	"reward_f": 1,
+        "weights": [1.0, 1.0, 0.01]
      },
 
     "Training":
@@ -42,7 +42,7 @@
     	"subfolder": "",
     	"suffix":"",
     	"display": true,
-        "max_episodes": 3,
+        "max_episodes": 300,
         "hidden_layers": 3,
         "neurons": 100,
         "lr": 5e-4,

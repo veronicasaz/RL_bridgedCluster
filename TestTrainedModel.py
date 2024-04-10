@@ -28,7 +28,7 @@ colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
 
         
 if __name__ == '__main__':
-    experiment = 1 # number of the experiment to be run
+    experiment = 2 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
@@ -53,11 +53,11 @@ if __name__ == '__main__':
             env.settings['Training']['lr'] = 1e-3 # TODO: fill in manually
 
         NAMES = []
-        NAMES.append('actionRL')
+        NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
         run_trajectory(env, action = 'RL')
         for act in range(env.settings['RL']['number_actions']):
-            NAMES.append('action'+ str(env.actions[act]))
+            NAMES.append('_action'+ str(env.actions[act]))
             env.settings['Integration']['suffix'] = NAMES[act+1]
             run_trajectory(env, action = act)
 
