@@ -471,9 +471,9 @@ class Cluster_env(gym.Env):
                 return a
             
             if self.settings['RL']['reward_f'] == 1:
-                a = -W[0]*(np.log10(abs(Delta_E)) +np.log10(abs(Delta_E_local))) +\
-                    W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
-                    W[1]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
+                a = W[0]*(np.log10(abs(Delta_E)) *np.log10(abs(Delta_E_local))) +\
+                    -W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
+                    -W[1]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
                     W[2]*1/abs(np.log10(action))
                 return a
             
