@@ -18,6 +18,9 @@ from PlotsFunctions import plot_planets_trajectory, plot_planetary_system_trajec
     plot_evolution
 
 
+colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
+        'mediumslateblue', 'deepskyblue', 'navy']
+
 def run_trajectory(env, action = 'RL', model_path = None):
     """
     run_trajectory: Run one initialization with RL or with an integrator
@@ -107,7 +110,7 @@ def calculate_errors(states, cons, tcomp):
 
     return E_E, E_L, T_c, R, Action
 
-def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
+def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
     label_size = 18
     fig = plt.figure(figsize = (10,15))
@@ -119,7 +122,8 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     # Plot trajectories 2D
     name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
     legend = True
-    plot_traj_index = [0, len(STATES)-1] # plot best and worst
+    if plot_traj_index == 'bestworst':
+        plot_traj_index = [0, len(STATES)-1] # plot best and worst
     for case_i, case in enumerate(plot_traj_index): 
         ax1 = fig.add_subplot(gs1[0, case_i])
         ax12 = fig.add_subplot(gs1[1, case_i])
@@ -146,18 +150,17 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path):
     ax3 = fig.add_subplot(gs1[3, :])
     ax4 = fig.add_subplot(gs1[4, :])
     for case in range(len(STATES)):
-        plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case], \
+        plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
-        plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case], \
+        plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
-        plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case], \
+        plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
     
     for ax in [ax2, ax3, ax4]:
         ax.set_yscale('log')
 
     ax4.set_xlabel('Step', fontsize = label_size)
-
 
     ax2.set_ylabel('Energy Error', fontsize = label_size)
     ax3.set_ylabel('Energy Error Local', fontsize = label_size)
@@ -249,76 +252,152 @@ def plot_rewards(env, STATES, CONS, TCOMP, Titles, save_path):
     plt.show()
 
 def calculate_rewards(E_E, E_E_local, T_comp, action, type_reward, W):
+    len_array = len(E_E[2:])
 
     if type_reward == 0:
-        a = -(W[0]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) + \
-            W[1]*(np.log10(abs(E_E_local[1:])))) +\
-            (W[2]*1/abs(np.log10(action)))
-
+        # a = -(W[0]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) + \
+        #     W[1]*(np.log10(abs(E_E_local[2:])))).flatten() +\
+        #     np.ones(len_array) *W[2]*1/abs(np.log10(action))
+    
+        a = (W[0]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) + \
+            W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1])))).flatten() +\
+            np.ones(len_array) *W[2]*1/abs(np.log10(action))
+        a = a/abs(a) * np.log(abs(a))
+        
     elif type_reward == 1:
-        a = -(W[0]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) + \
-            W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1])))) +\
-            (W[2]*1/abs(np.log10(action)))
+        a = (-W[0]*( np.log10(abs(E_E[2:]) + abs(E_E_local[2:]))) + \
+            W[1]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) +\
+            W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1]))) 
+            ).flatten()
+        b = np.ones(len_array) *W[2]*1/abs(np.log10(action))
+        
+        a += b
+
     elif type_reward == 2:
-        a = -(W[0]*np.log10(abs(E_E[1:])) + \
-            W[1]*(np.log10(abs(E_E_local[1:])))) +\
-            (W[2]*1/abs(np.log10(action)))
+        a = -(W[0]*( np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1])) ) / np.log10(abs(E_E[1:-1])) + \
+            W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1]))) / np.log10(abs(E_E_local[1:-1]))).flatten() +\
+            np.ones(len_array) *W[2]*1/abs(np.log10(action))
+        
+        a = a/abs(a) * np.log(abs(a))
 
     return a
 
 def plot_reward_comparison(env, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
-    fig = plt.figure(figsize = (10,15))
+    fig = plt.figure(figsize = (10,6))
 
-    reward_types = 6
-    gs1 = matplotlib.gridspec.GridSpec(4, 1, 
+    gs1 = matplotlib.gridspec.GridSpec(1, 1, 
                                     left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
-                                    top = 0.9, bottom = 0.07)
+                                    top = 0.75, bottom = 0.09)
     
     # Plot energy error
     linestyle = ['-', '--', '-.', '-', '-', '-', '-', '-', '-']
     Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
 
-    W = np.zeros([[1.0, 1.0, 1e-2],
-                  [1.0, 10.0, 1e-2],
-                  [1.0, 1.0, 1e-2],
-                  [1.0, 10.0, 1e-2],
-                  [1.0, 1.0, 1e-2]
+    W = np.array([[0, 1.0, 1.0, 1e-2],
+                  [0, 100.0, 1000.0, 1e-2],
+                  [1, 10.0, 1.0, 1e-2],
+                  [1, 1.0, 0.0, 1e-2],
+                  [2, 1.0, 1.0, 1e-2],
+                  [2, 100.0, 1000.0, 1e-2]
                   ])
     
-    ax1 = fig.add_subplot(gs1[0, :])
-    ax2 = fig.add_subplot(gs1[1, :])
-    ax3 = fig.add_subplot(gs1[2, :])
+    ax4 = fig.add_subplot(gs1[0, :])
     
-    plot_evolution(ax1, x_axis, Energy_error[1:, 0], label = Titles[0][1:], \
+    plot_evolution(ax4, x_axis, Energy_error[1:, 0], label = r'$\Delta E$', \
                        colorindex = 0, linestyle = linestyle[0])
-    plot_evolution(ax2, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
-                       colorindex = 0, linestyle = linestyle[0])
-    plot_evolution(ax3, x_axis, T_comp[1:, 0], label = Titles[0][1:], \
-                       colorindex = 0, linestyle = linestyle[0])
+    plot_evolution(ax4, x_axis, Energy_error_local[1:, 0], label = r'$\Delta E_{local}$', \
+                       colorindex = 0, linestyle = linestyle[1])
+    # plot_evolution(ax4, x_axis, T_comp[1:, 0], label = r'$T_{comp} (s)$', \
+    #                    colorindex = 0, linestyle = linestyle[2])
     
-    Rewards = np.zeros(reward_types)
-    ax4 = fig.add_subplot(gs1[3, :])
-    for case in range(reward_types):
-        Rewards[case] = calculate_rewards(Energy_error, Energy_error_local, T_comp, \
-                                    action, case, W[case, :])
-        plot_evolution(ax4, x_axis, Rewards[case], \
-                       label = 'Reward %i, W = %i, %i, %i'%(case, W[case, 0], W[case, 1], W[case, 2]), \
-                       colorindex = case//2, linestyle = linestyle[case%2])
-        ax4.set_yscale('log')
-        ax4.set_ylabel('Reward', fontsize = label_size)
+    secax_y = ax4.twinx()
     
-    ax1.legend(loc='upper center', bbox_to_anchor=(0.5, 1.7), \
-                       fancybox = True, ncol = 3, fontsize = label_size-3)
+    Rewards = np.zeros((len(W), len(Energy_error[2:, 0])+1))
+    for case_i, case in enumerate(W[:, 0]):
+        case = int(case)
+        Rewards[case_i, 1:] = calculate_rewards(Energy_error, Energy_error_local, T_comp, \
+                                    env.actions[int(action[0])], case, W[case_i, 1:])
+        plot_evolution(secax_y, x_axis[1:], Rewards[case_i,1:], \
+                       label = r'$R_{type}$ %i, W = %i, %i, %.0E'%(W[case_i, 0], W[case_i, 1], W[case_i, 2], W[case_i, 3]), \
+                       colorindex = 1+ case_i//2, linestyle = linestyle[case_i%2])
+
+    ax4.set_yscale('symlog', linthresh = 1e-3)
+    ax4.set_ylabel('Energy Error', fontsize = label_size)
+    secax_y.set_ylabel('Reward', fontsize = label_size)
+    ax4.set_title('Action %.1E'%env.actions[int(action[0])])
+
+    ax4.legend(loc='upper left', fontsize = label_size-5)
+    secax_y.legend(loc='upper center', bbox_to_anchor=(0.5, 1.3), \
+                       fancybox = True, ncol = 3, fontsize = label_size-5)
     ax4.set_xlabel('Step', fontsize = label_size)
 
     plt.savefig(save_path, dpi = 150)
     plt.show()
 
+
+def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
+    # Setup plot
+    label_size = 18
+    fig = plt.figure(figsize = (10,15))
+    gs1 = matplotlib.gridspec.GridSpec(4, 2, 
+                                    left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
+                                    top = 0.9, bottom = 0.07)
+    
+    
+    # Plot trajectories 2D
+    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    legend = True
+
+    # Plot energy error
+    linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
+    Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+
+    x_axis = np.arange(1, len(T_comp), 1)
+
+    ax1 = fig.add_subplot(gs1[0, 0])
+    ax12 = fig.add_subplot(gs1[0, 1])
+    ax2 = fig.add_subplot(gs1[1, :])
+    ax3 = fig.add_subplot(gs1[2, :])
+    ax4 = fig.add_subplot(gs1[3, :])
+    for case in range(len(STATES)):
+        ax1.scatter(T_comp[-1, case], Energy_error[-1, case], label = Titles[case][1:], \
+                    color = colors[(case+3)%len(colors)])
+        ax12.scatter(T_comp[-1, case], Energy_error_local[-1, case], label = Titles[case][1:], \
+                    color = colors[(case+3)%len(colors)])
+        plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = linestyle[case])
+        plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = linestyle[case])
+        plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = linestyle[case])
+    
+    for ax in [ax1, ax12, ax2, ax3, ax4]:
+        ax.set_yscale('log')
+
+    ax1.set_xscale('log')
+    ax12.set_xscale('log')
+
+    ax4.set_xlabel('Step', fontsize = label_size)
+
+    ax1.set_ylabel('Energy Error', fontsize = label_size)
+    ax12.set_ylabel('Energy Error Local', fontsize = label_size)
+    ax1.set_xlabel('Computation time (s)', fontsize = label_size)
+    ax12.set_xlabel('Computation time (s)', fontsize = label_size)
+
+    ax2.set_ylabel('Energy Error', fontsize = label_size)
+    ax3.set_ylabel('Energy Error Local', fontsize = label_size)
+    ax4.set_ylabel('Computation time (s)', fontsize = label_size)
+    
+    ax2.legend(fontsize = label_size -3)
+
+    plt.savefig(save_path, dpi = 150)
+    plt.show()
+
 if __name__ == '__main__':
-    experiment = 1 # number of the experiment to be run
+    experiment = 3 # number of the experiment to be run
             
     if experiment == 1: # run bridge for all actions
         env = Cluster_env()
@@ -405,7 +484,7 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Reward_comparison.png'
-        plot_reward_comparison(env, STATE[action], CONS[action], TCOMP[action], NAMES[action], save_path)
+        plot_reward_comparison(env, [STATE[action]], [CONS[action]], [TCOMP[action]], [NAMES[action]], save_path)
 
 
 

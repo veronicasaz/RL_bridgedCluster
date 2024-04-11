@@ -18,7 +18,8 @@ import gym
 from env.BridgedCluster_env import Cluster_env
 from TrainRL import train_net
 from TrainingFunctions import DQN, load_reward, plot_reward
-from TestEnvironment import run_trajectory, load_state_files, plot_trajs
+from TestEnvironment import run_trajectory, load_state_files, plot_trajs,\
+    plot_comparison_end
 
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
@@ -28,7 +29,7 @@ colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
 
         
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 0 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
@@ -55,11 +56,11 @@ if __name__ == '__main__':
         NAMES = []
         NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
-        run_trajectory(env, action = 'RL')
+        # run_trajectory(env, action = 'RL')
         for act in range(env.settings['RL']['number_actions']):
             NAMES.append('_action'+ str(env.actions[act]))
             env.settings['Integration']['suffix'] = NAMES[act+1]
-            run_trajectory(env, action = act)
+            # run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
@@ -73,6 +74,7 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL.png'
-        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
+        # plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])
+        plot_comparison_end(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])
 
 

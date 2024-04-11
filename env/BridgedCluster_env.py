@@ -280,8 +280,8 @@ class Cluster_env(gym.Env):
         
         # finish experiment if max number of iterations is reached
         if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
+            (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
-            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -471,9 +471,10 @@ class Cluster_env(gym.Env):
                 return a
             
             if self.settings['RL']['reward_f'] == 1:
-                a = -(W[0]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
-                      W[1]*(np.log10(abs(Delta_E_local)))) +\
-                        (W[2]*1/abs(np.log10(action)))
+                a = -W[0]*(np.log10(abs(Delta_E)) +np.log10(abs(Delta_E_local))) +\
+                    W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
+                    W[1]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
+                    W[2]*1/abs(np.log10(action))
                 return a
             
             elif self.settings['RL']['reward_f'] == 2:
@@ -503,9 +504,10 @@ class Cluster_env(gym.Env):
             reward: value of the reward for the given step
             action: action taken at this step
         """
-        print("Iteration: %i/%i, E_E = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
+        print("Iteration: %i/%i, E_E = %0.3E,  E_E_local = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
                                  self.settings['Integration']['max_steps'],\
                                  info[0],\
+                                 info[1],\
                                  action, \
                                  reward))
             

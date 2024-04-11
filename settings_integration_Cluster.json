@@ -33,7 +33,7 @@
         "number_actions": 4,
 	"range_action": [1e-4, 1e-1],
 	"reward_f": 1,
-        "weights": [1.0, 1.0, 0.01]
+        "weights": [10.0, 1.0, 0.01]
      },
 
     "Training":
