@@ -146,6 +146,40 @@ def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12,
     ax.set_yscale('log')
     return Dist
 
+
+def plot_distance_to_one(ax, x_axis, state, labelsize = 12, 
+                         legend = True):
+    """
+    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        x_axis: time or steps to be plotted in the x axis
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+    """
+    steps = len(x_axis)
+    Dist = []
+    Labels = []
+    
+    last_index = np.where(state[0, :, 8] == 1)[0][0]
+    r0 = state[0:steps, last_index, 2:5]
+    for i in range(0, last_index):
+        r1 = state[0:steps, i, 2:5]
+        m = state[0, i, 1]
+        Dist.append(np.linalg.norm(r0-r1, axis = 1))
+        Labels.append('Particle %i'%(i))
+        
+        size_marker = np.log(m)/30
+    for i in range(len(Dist)):
+        ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5)
+    if legend == True:
+        ax.legend(fontsize =labelsize, framealpha = 0.5)
+    # ax.set_yscale('log')
+
+    return Dist
+
 def plot_actions_taken(ax, x_axis, y_axis):
     """
     plot_actions_taken: plot steps vs actions taken by the RL algorithm
@@ -174,6 +208,6 @@ def plot_evolution(ax, x_axis, y_axis, label = None, color = None,
         linewidth: matplotlib parameter for the width of the line
     """
     if colorindex != None:
-        color = colors[(colorindex+3)%len(colors)] # start in the blues
+        color = colors[(colorindex+2)%len(colors)] # start in the blues
     ax.plot(x_axis, y_axis, color = color, linestyle = linestyle, label = label, 
             linewidth = linewidth)

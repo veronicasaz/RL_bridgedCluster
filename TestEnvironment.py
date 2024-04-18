@@ -15,7 +15,7 @@ from env.BridgedCluster_env import Cluster_env
 from TrainingFunctions import DQN
 
 from PlotsFunctions import plot_planets_trajectory, plot_planetary_system_trajectory, \
-    plot_evolution
+    plot_evolution, plot_actions_taken, plot_distance_to_one
 
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
@@ -261,7 +261,7 @@ def calculate_rewards(E_E, E_E_local, T_comp, action, type_reward, W):
     
         a = (W[0]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) + \
             W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1])))).flatten() +\
-            np.ones(len_array) *W[2]*1/abs(np.log10(action))
+            np.ones(len_array) *W[3]*1/abs(np.log10(action))
         a = a/abs(a) * np.log(abs(a))
         
     elif type_reward == 1:
@@ -269,14 +269,23 @@ def calculate_rewards(E_E, E_E_local, T_comp, action, type_reward, W):
             W[1]*(np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1]))) +\
             W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1]))) 
             ).flatten()
-        b = np.ones(len_array) *W[2]*1/abs(np.log10(action))
+        b = np.ones(len_array) *W[3]*1/abs(np.log10(action))
         
         a += b
 
     elif type_reward == 2:
         a = -(W[0]*( np.log10(abs(E_E[2:]))-np.log10(abs(E_E[1:-1])) ) / np.log10(abs(E_E[1:-1])) + \
             W[1]*(np.log10(abs(E_E_local[2:]))-np.log10(abs(E_E_local[1:-1]))) / np.log10(abs(E_E_local[1:-1]))).flatten() +\
-            np.ones(len_array) *W[2]*1/abs(np.log10(action))
+            np.ones(len_array) *W[3]*1/abs(np.log10(action))
+        
+        a = a/abs(a) * np.log(abs(a))
+
+    elif type_reward == 3:
+        b = np.divide( E_E[2:]-E_E[1:-1], abs(E_E[1:-1]) ).flatten()
+        print(np.shape(b))
+        print(np.shape(np.ones(len_array) *W[3]*1/abs(np.log10(action))))
+        a = W[0]*np.divide(b, abs(b)) *np.log10(abs(b))+\
+            np.ones(len_array) *W[3]*1/abs(np.log10(action))
         
         a = a/abs(a) * np.log(abs(a))
 
@@ -296,12 +305,12 @@ def plot_reward_comparison(env, STATES, CONS, TCOMP, Titles, save_path):
     Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
 
-    W = np.array([[0, 1.0, 1.0, 1e-2],
-                  [0, 100.0, 1000.0, 1e-2],
-                  [1, 10.0, 1.0, 1e-2],
-                  [1, 1.0, 0.0, 1e-2],
-                  [2, 1.0, 1.0, 1e-2],
-                  [2, 100.0, 1000.0, 1e-2]
+    W = np.array([[0, 1.0, 1.0, 10, 1e-2],
+                  [1, 10.0, 1.0, 10, 1e-2],
+                  [2, 1.0, 1.0, 10, 1e-2],
+                  [2, 100.0, 1000.0,10, 1e-2],
+                  [3, 1.0, 0.0, 0.0, 1e-2],
+                  [3, 100, 0.0, 0.0, 1e-2]
                   ])
     
     ax4 = fig.add_subplot(gs1[0, :])
@@ -318,6 +327,7 @@ def plot_reward_comparison(env, STATES, CONS, TCOMP, Titles, save_path):
     Rewards = np.zeros((len(W), len(Energy_error[2:, 0])+1))
     for case_i, case in enumerate(W[:, 0]):
         case = int(case)
+        print(case_i)
         Rewards[case_i, 1:] = calculate_rewards(Energy_error, Energy_error_local, T_comp, \
                                     env.actions[int(action[0])], case, W[case_i, 1:])
         plot_evolution(secax_y, x_axis[1:], Rewards[case_i,1:], \
@@ -363,10 +373,11 @@ def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_i
     ax3 = fig.add_subplot(gs1[2, :])
     ax4 = fig.add_subplot(gs1[3, :])
     for case in range(len(STATES)):
+        print(T_comp[-1, case], Energy_error[-1, case])
         ax1.scatter(T_comp[-1, case], Energy_error[-1, case], label = Titles[case][1:], \
-                    color = colors[(case+3)%len(colors)])
+                    color = colors[(case+2)%len(colors)])
         ax12.scatter(T_comp[-1, case], Energy_error_local[-1, case], label = Titles[case][1:], \
-                    color = colors[(case+3)%len(colors)])
+                    color = colors[(case+2)%len(colors)])
         plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
         plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
@@ -379,6 +390,8 @@ def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_i
 
     ax1.set_xscale('log')
     ax12.set_xscale('log')
+
+    ax1.legend()
 
     ax4.set_xlabel('Step', fontsize = label_size)
 
@@ -396,10 +409,84 @@ def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_i
     plt.savefig(save_path, dpi = 150)
     plt.show()
 
+def plot_distance_action(env, STATES, CONS, TCOMP, Titles, save_path):
+    # Setup plot
+    label_size = 18
+    fig = plt.figure(figsize = (10,15))
+    gs1 = matplotlib.gridspec.GridSpec(3, 1, 
+                                    left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
+                                    top = 0.9, bottom = 0.07)
+    
+    
+    # Plot trajectories 2D
+    # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    # legend = True
+    # if plot_traj_index == 'bestworst':
+    #     plot_traj_index = [0, len(STATES)-1] # plot best and worst
+    # # for case_i, case in enumerate(plot_traj_index): 
+    #     ax1 = fig.add_subplot(gs1[0, case_i])
+    #     ax12 = fig.add_subplot(gs1[1, case_i])
+    #     plot_planets_trajectory(ax1, STATES[case], name_bodies, \
+    #                         labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
+    #     plot_planetary_system_trajectory(ax12, STATES[case], name_bodies, \
+    #                         labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
+    #     ax1.set_title(Titles[case], fontsize = label_size + 2)
+    #     ax1.set_xlabel('x (au)', fontsize = label_size)
+    #     ax1.set_ylabel('y (au)', fontsize = label_size)
+    #     ax12.set_xlabel('x (au)', fontsize = label_size)
+    #     ax12.set_ylabel('y (au)', fontsize = label_size)
+    #     if case == 0: 
+    #         legend = False
+    #         ax1.legend(loc='upper center', bbox_to_anchor=(0.8, 1.7), \
+    #                    fancybox = True, ncol = 3, fontsize = label_size-2)
+        
+
+    # Plot energy error
+    linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
+    Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    x_axis = np.arange(0, len(T_comp), 1)
+    ax2 = fig.add_subplot(gs1[0, :])
+    ax3 = fig.add_subplot(gs1[1, :])
+    ax4 = fig.add_subplot(gs1[2, :])
+    plot_distance_to_one(ax2, x_axis, STATES[0] ) # plot for RL one
+    plot_actions_taken(ax3, x_axis, action[:, 0])
+    for case in range(len(STATES)):
+        plot_evolution(ax4, x_axis[1:], Energy_error[1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = linestyle[case])
+        # plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
+        #                colorindex = case, linestyle = linestyle[case])
+        # plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case][1:], \
+        #                colorindex = case, linestyle = linestyle[case])
+    
+    for ax in [ax2, ax4]:
+        ax.set_yscale('log')
+
+    ax4.set_xlabel('Step', fontsize = label_size)
+
+    ax4.set_ylabel('Energy Error', fontsize = label_size)
+    
+    ax2.legend(fontsize = label_size -3)
+    ax4.legend(fontsize = label_size -3)
+
+    plt.savefig(save_path, dpi = 150)
+    plt.show()
+
 if __name__ == '__main__':
     experiment = 3 # number of the experiment to be run
             
-    if experiment == 1: # run bridge for all actions
+    if experiment == 0: #test creation of planetary systems
+        
+        seed = np.random.randint(10000, size = 1000)
+        # seed = [6496]
+        for i in range(len(seed)):
+            print(i, seed[i])
+            env = Cluster_env()
+            env.settings['Integration']['savestate'] = False
+            env.settings['InitialConditions']['seed'] = seed[i]
+            state, info = env.reset()
+            env.close()
+    
+    elif experiment == 1: # run bridge for all actions
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions/'
         env.settings['InitialConditions']['seed'] = 1
