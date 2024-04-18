@@ -146,7 +146,8 @@ class Cluster_env(gym.Env):
         #################################
         # Planetary system
         inner_radius_disk = self.settings['InitialConditions']['disk_radius'][0] | units.au
-        outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1]  |units.au/np.sqrt(sun.mass.value_in(units.MSun))
+        # outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au/np.sqrt(sun.mass.value_in(units.MSun))
+        outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au
         mass_disk = self.settings['InitialConditions']['mass_disk'] *sun.mass
         ps = make_planets_oligarch.new_system(sun.mass,
                                             sun.radius,
@@ -170,7 +171,6 @@ class Cluster_env(gym.Env):
         cluster.add_particles(stars)
         cluster.add_particle(sun)
         cluster.add_particles(planets)
-        print(cluster)
 
         return stars, planetary_system, cluster
 
@@ -280,8 +280,8 @@ class Cluster_env(gym.Env):
         
         # finish experiment if max number of iterations is reached
         if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
-            (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
+            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -467,33 +467,33 @@ class Cluster_env(gym.Env):
             if self.settings['RL']['reward_f'] == 0: # global energy and 1e-7 limit
                 a = -(W[0]* np.log10(abs(Delta_E)) + \
                          W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
-                        (W[2]*1/abs(np.log10(action)) )
+                        (W[3]*1/abs(np.log10(action)) )
                 return a
             
             if self.settings['RL']['reward_f'] == 1:
-                a = W[0]*(np.log10(abs(Delta_E)) *np.log10(abs(Delta_E_local))) +\
-                    -W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
-                    -W[1]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
-                    W[2]*1/abs(np.log10(action))
+                a = -W[0]*np.log10(abs(Delta_E)) -W[1]*np.log10(abs(Delta_E_local)) +\
+                    -W[2]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
+                    -W[2]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
+                     W[3]*1/abs(np.log10(action))
                 return a
             
             elif self.settings['RL']['reward_f'] == 2:
                 a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
                          abs(np.log10(abs(Delta_E)))**2 +\
                          W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))))+\
-                         W[2]*1/abs(np.log10(action))
+                         W[3]*1/abs(np.log10(action))
                 return a
 
             elif self.settings['RL']['reward_f'] == 3:
-                a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
-                         abs(np.log10(abs(Delta_E)))**2 +\
-                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))))*\
-                         W[2]*1/abs(np.log10(action))
-                return a
+                a =  (Delta_E-Delta_E_prev)/abs(Delta_E)
+                b = -W[1]*(a/abs(a))*np.log10(abs(a)) +\
+                        W[3]*1/abs(np.log10(action))
+                return b
                 
             elif self.settings['RL']['reward_f'] == 4:
-                a = -W[0]*np.log10(abs(Delta_E)) + \
-                    W[2]/abs(np.log10(action))
+                a = abs(Delta_E-Delta_E_prev)/abs(Delta_E_prev)
+                a = -W[0]*np.log10(a) + \
+                    W[3]/abs(np.log10(action))
                 return a
     
     def _display_info(self, info, reward, action):

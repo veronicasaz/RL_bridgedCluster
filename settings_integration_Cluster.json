@@ -16,7 +16,7 @@
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 100,
+        "max_steps": 50,
         "check_step": 0.1, 
         "t_step_global": 1e-3,
         "t_step_local": 1e-3,
@@ -30,10 +30,10 @@
         "state": "cart",
         "state_options_info": ["norm", "cart", "dist"],
         "action": "range", 
-        "number_actions": 4,
+        "number_actions": 3,
 	"range_action": [1e-4, 1e-1],
-	"reward_f": 1,
-        "weights": [1.0, 10.0, 1.0]
+	"reward_f": 4,
+        "weights": [1.0, 10, 30.0, 1.0e-2]
      },
 
     "Training":
