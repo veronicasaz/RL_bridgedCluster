@@ -197,6 +197,7 @@ def plot_reward(a, reward, Eerror, HuberLoss):
     steps_perepisode = np.zeros(episodes)
     cumul_reward_perepisode = np.zeros(episodes)
     avg_reward_perepisode = np.zeros(episodes)
+    avg_energy_perepisode = np.zeros(episodes)
     last_energy_perepisode = np.zeros(episodes)
     reward_flat = list()
     energyerror_flat = list()
@@ -207,6 +208,7 @@ def plot_reward(a, reward, Eerror, HuberLoss):
         steps_perepisode[i] = len(reward[i])
         cumul_reward_perepisode[i] = sum(reward[i])
         avg_reward_perepisode[i] = np.mean(reward[i])
+        avg_energy_perepisode[i] = np.mean(abs(np.array(Eerror[i])))
         reward_flat = reward_flat + reward[i][1:]
         try:
             last_energy_perepisode[i] = abs(Eerror[i][-1])
@@ -237,23 +239,25 @@ def plot_reward(a, reward, Eerror, HuberLoss):
     ax[0].plot(x_all, reward_flat, color = colors[0], alpha = 1)
     yy = savgol_filter(np.ravel(reward_flat), 111, 1)    
     ax[0].plot(x_all, yy, color = 'black')
-    ax[0].set_ylabel('Steps', fontsize = fontsize)
+    ax[0].set_ylabel('Reward', fontsize = fontsize)
     ax[0].tick_params(axis='x', labelsize=fontsize-5)
     ax[0].tick_params(axis='y', labelsize=fontsize-5)
 
-    ax[1].plot(x_episodes, avg_reward_perepisode, color = colors[0], alpha = 1)
-    yy = savgol_filter(np.ravel(avg_reward_perepisode), pts, 1)
+    y = avg_reward_perepisode
+    ax[1].plot(x_episodes,y, color = colors[0], alpha = 1)
+    yy = savgol_filter(np.ravel(y), pts, 1)
     ax[1].plot(x_episodes, yy, color = 'black')
-    ax[1].set_ylabel('Cumulative reward', fontsize = fontsize)
+    ax[1].set_ylabel(r'Average $R$/episode', fontsize = fontsize)
     ax[1].set_yscale('symlog', linthresh = 1e1)
     ax[1].tick_params(axis='x', labelsize=fontsize-5)
     ax[1].tick_params(axis='y', labelsize=fontsize-5)
 
-    ax[2].plot(x_episodes, last_energy_perepisode, color = colors[0], alpha = 1)
-    yy = savgol_filter(np.ravel(last_energy_perepisode), pts, 1)
+    y = avg_energy_perepisode
+    ax[2].plot(x_episodes, y, color = colors[0], alpha = 1)
+    yy = savgol_filter(np.ravel(y), pts, 1)
     ax[2].plot(x_episodes, yy, color = 'black')
     ax[2].set_xlabel('Episode', fontsize = fontsize)
-    ax[2].set_ylabel('Final Energy Error', fontsize = fontsize)
+    ax[2].set_ylabel(r'Average $\Delta E/episode$', fontsize = fontsize)
     ax[2].set_yscale('symlog', linthresh = 1e-5)
     ax[2].tick_params(axis='x', labelsize=fontsize-5)
     ax[2].tick_params(axis='y', labelsize=fontsize-5)

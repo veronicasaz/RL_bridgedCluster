@@ -29,7 +29,7 @@ colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
 
         
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 1 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
@@ -74,8 +74,12 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL.png'
-        # plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])
-        # plot_distance_action(env, STATE, CONS, TCOMP, NAMES, save_path)
+        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])
+        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'Action_comparison_RL2.png'
+        plot_distance_action(env, STATE, CONS, TCOMP, NAMES, save_path)
+        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'Action_comparison_RL3.png'
         plot_comparison_end(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])
 
 
