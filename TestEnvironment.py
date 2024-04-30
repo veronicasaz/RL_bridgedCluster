@@ -472,7 +472,7 @@ def plot_distance_action(env, STATES, CONS, TCOMP, Titles, save_path):
     plt.show()
 
 if __name__ == '__main__':
-    experiment = 3 # number of the experiment to be run
+    experiment = 1 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -494,6 +494,7 @@ if __name__ == '__main__':
         NAMES = []
         # for act in range(1):
         for act in range(env.settings['RL']['number_actions']):
+            print("Action", env.actions[act])
             name = '_action'+str(act)
             NAMES.append(name)
             env.settings['Integration']['suffix'] = NAMES[act]

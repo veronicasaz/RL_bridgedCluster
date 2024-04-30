@@ -214,10 +214,12 @@ class Cluster_env(gym.Env):
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
-        self.E_0, self.E_0_local = self._get_info(self.particles_joined, self.grav_local.particles, initial = True)
-
+        self.E_0_bridge, self.E_0_total, self.E_0_global, self.E_0_local = \
+            self._get_info(self.particles_joined, self.grav_global.particles, \
+                                    self.grav_local.particles, initial = True)
+        
         # Create state vector
-        state_RL = self._get_state(self.particles_joined, self.E_0) # |r_i|, |v_i|
+        state_RL = self._get_state(self.particles_joined, 1) # |r_i|, |v_i|
 
         # Initialize time
         self.grav_bridge.timestep = self.actions[0] | self.units_time
@@ -233,11 +235,12 @@ class Cluster_env(gym.Env):
         if self.settings['Integration']['savestate'] == True:
             steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
             self.state = np.zeros((steps, self.n_bodies_total, 9)) # action, mass, rx3, vx3, name
-            self.cons = np.zeros((steps, 4)) # action, reward, E, E_local 
+            self.cons = np.zeros((steps, 5)) # action, reward, E
             self.comp_time = np.zeros(steps) # computation time
-            self._savestate(0, 0, self.particles_joined, 0.0, 0.0, 0.0, 0.0) # save initial state
+            self._savestate(0, 0, self.particles_joined, [1.0, 1.0, 1.0],\
+                             0.0, 0.0) # save initial state
 
-        self.info_prev = [0.0, 0.0]
+        self.info_prev = [0.0, 0.0, 0.0]
         return state_RL, self.info_prev
     
     def step(self, action):
@@ -265,18 +268,19 @@ class Cluster_env(gym.Env):
 
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
-        
-        # print("===================")
-        # print(self.particles_joined)
             
         # Get information for the reward
-        info_error = self._get_info(self.particles_joined, self.grav_local.particles)
+        info_error = self._get_info(self.particles_joined, \
+                                    self.grav_global.particles, \
+                                    self.grav_local.particles)
         state = self._get_state(self.particles_joined, info_error[0])
-        reward = self._calculate_reward(info_error, self.info_prev, T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
+        reward = self._calculate_reward(info_error[0], self.info_prev[0], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
         
         if self.settings['Integration']['savestate'] == True:
-            self._savestate(action, self.iteration, self.particles_joined, info_error[0], info_error[1], T, reward) # save initial state
+            self._savestate(action, self.iteration, self.particles_joined, \
+                            [info_error[0], info_error[1], info_error[2]],\
+                            T, reward) # save initial state
         
         # finish experiment if max number of iterations is reached
         if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
@@ -381,27 +385,37 @@ class Cluster_env(gym.Env):
             
         return g 
     
-    def _get_info(self, particles, particles_local, initial = False): # change to include multiple energies
+    def _get_info(self, particles, particles_global, particles_local, initial = False): # change to include multiple energies
         """
         _get_info: get energy error, angular momentum error at current state
         OUTPUTS:
             Relative energy error, Relative Angular momentum error vector 
         """
-        E_kin = particles.kinetic_energy().value_in(self.units_energy)
-        E_pot = particles.potential_energy(G = self.G).value_in(self.units_energy)
-
+        E_global = particles_global.kinetic_energy().value_in(self.units_energy) +\
+            particles_global.potential_energy(G = self.G).value_in(self.units_energy)
+        
         E_local = particles_local.kinetic_energy().value_in(self.units_energy) +\
             particles_local.potential_energy(G = self.G).value_in(self.units_energy)
         
+        E_kin = particles.kinetic_energy().value_in(self.units_energy)
+        E_pot = particles.potential_energy(G = self.G).value_in(self.units_energy)
+        E_total = E_kin + E_pot
+        
         # L = self.calculate_angular_m(particles)
         if initial == True:
-            return E_kin + E_pot, E_local
+            E_bridge = E_total - (E_global + E_local)
+            return E_bridge, E_total, E_global, E_local
         else:
-            Delta_E = (E_kin + E_pot - self.E_0) / self.E_0
-            Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
+            Delta_E_total = (E_total - self.E_0_total)
+            Delta_E_global = (E_global - self.E_0_global)
+            Delta_E_local = (E_global - self.E_0_local)
+            Delta_E_bridge = Delta_E_total - (Delta_E_global + Delta_E_local)
+            # Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
             # Delta_L = (L - self.L_0) / self.L_0
-            return Delta_E, Delta_E_local
-
+            # return Delta_E_bridge/self.E_0_total, \
+            return Delta_E_total/self.E_0_total, \
+                    Delta_E_global/self.E_0_global, \
+                    Delta_E_local/self.E_0_local
 
     def _get_state(self, particles, E):  # TODO: change to include all particles?
         """
@@ -458,8 +472,8 @@ class Cluster_env(gym.Env):
         OUTPUTS:
             a: reward value
         """
-        Delta_E, Delta_E_local = info
-        Delta_E_prev, Delta_E_local_prev = info_prev
+        Delta_E = info
+        Delta_E_prev= info_prev
 
         if Delta_E_prev == 0.0: # for the initial step
             return 0
@@ -470,12 +484,12 @@ class Cluster_env(gym.Env):
                         (W[3]*1/abs(np.log10(action)) )
                 return a
             
-            if self.settings['RL']['reward_f'] == 1:
-                a = -W[0]*np.log10(abs(Delta_E)) -W[1]*np.log10(abs(Delta_E_local)) +\
-                    -W[2]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
-                    -W[2]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
-                     W[3]*1/abs(np.log10(action))
-                return a
+            # if self.settings['RL']['reward_f'] == 1:
+            #     a = -W[0]*np.log10(abs(Delta_E)) -W[1]*np.log10(abs(Delta_E_local)) +\
+            #         -W[2]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) + \
+            #         -W[2]*(np.log10(abs(Delta_E_local))-np.log10(abs(Delta_E_local_prev))) +\
+            #          W[3]*1/abs(np.log10(action))
+            #     return a
             
             elif self.settings['RL']['reward_f'] == 2:
                 a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
@@ -491,7 +505,7 @@ class Cluster_env(gym.Env):
                 return b
                 
             elif self.settings['RL']['reward_f'] == 4:
-                a = abs(Delta_E-Delta_E_prev)/abs(Delta_E_prev)
+                a = abs(Delta_E - Delta_E_prev)/abs(Delta_E_prev)
                 a = -W[0]*np.log10(a) + \
                     W[3]/abs(np.log10(action))
                 return a
@@ -504,14 +518,13 @@ class Cluster_env(gym.Env):
             reward: value of the reward for the given step
             action: action taken at this step
         """
-        print("Iteration: %i/%i, E_E = %0.3E,  E_E_local = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
+        print("Iteration: %i/%i, E_E bridge = %0.3E, E_E global = %0.3E, E_E local = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
                                  self.settings['Integration']['max_steps'],\
-                                 info[0],\
-                                 info[1],\
+                                 info[0], info[1], info[2],\
                                  action, \
                                  reward))
             
-    def _savestate(self, action, step, particles, E, E_local, T, R):
+    def _savestate(self, action, step, particles, E, T, R):
         """
         _savestate: save state of the system to file
         INPUTS:
@@ -536,8 +549,9 @@ class Cluster_env(gym.Env):
         self.state[step, :, 8] = particles_name_code
         self.cons[step, 0] = action
         self.cons[step, 1] = R
-        self.cons[step, 2] = E
-        self.cons[step, 3] = E_local
+        self.cons[step, 2] = E[0]
+        self.cons[step, 3] = E[1]
+        self.cons[step, 4] = E[2]
         self.comp_time[step-1] = T
 
         np.save(self.settings['Integration']['savefile'] + self.settings['Integration']['subfolder'] +\
