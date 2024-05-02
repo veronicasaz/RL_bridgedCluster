@@ -16,13 +16,13 @@
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 50,
+        "max_steps": 20,
         "check_step": 0.1, 
         "t_step_global": 1e-3,
         "t_step_local": 1e-3,
         "integrator_global": "Ph4",
         "integrator_local": "Huayno",
-        "max_error_accepted": 1e-1,
+        "max_error_accepted": 1e1,
         "plot": false
     },
     "RL":

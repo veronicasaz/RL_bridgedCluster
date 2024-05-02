@@ -97,18 +97,18 @@ def calculate_errors(states, cons, tcomp):
 
     # Calculate the energy errors
     R = np.zeros((steps, cases))
-    E_E = np.zeros((steps, cases))
-    E_L = np.zeros((steps, cases))
+    E_T = np.zeros((steps, cases))
+    E_B = np.zeros((steps, cases))
     T_c = np.zeros((steps, cases))
     Action = np.zeros((steps, cases))
     for i in range(cases):
         R[1:, i] = cons[i][1:steps, 1]
-        E_E[1:, i] = abs(cons[i][1:steps, 2]) # absolute relative energy error
-        E_L[1:, i] = abs(cons[i][1:steps, 3]) # absolute relative local energy error
+        E_B[1:, i] = abs(cons[i][1:steps, 2]) # absolute relative energy error
+        E_T[1:, i] = abs(cons[i][1:steps, 3]) # absolute relative energy error
         T_c[1:, i] = np.cumsum(tcomp[i][1:steps]) # add individual computation times
         Action[1:, i] = cons[i][1:steps, 0]
 
-    return E_E, E_L, T_c, R, Action
+    return [E_B, E_T], T_c, R, Action
 
 def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
@@ -144,27 +144,29 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
     ax2 = fig.add_subplot(gs1[2, :])
     ax3 = fig.add_subplot(gs1[3, :])
-    ax4 = fig.add_subplot(gs1[4, :])
+    ax6 = fig.add_subplot(gs1[4, :])
     for case in range(len(STATES)):
-        plot_evolution(ax2, x_axis, Energy_error[1:, case], label = Titles[case][1:], \
+        plot_evolution(ax2, x_axis, Energy_error[1][1:, case], \
+                       colorindex = case, linestyle = '--')
+        plot_evolution(ax2, x_axis, Energy_error[0][1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = '-')
+        plot_evolution(ax3, x_axis, Energy_error[1][1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
-        plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
-                       colorindex = case, linestyle = linestyle[case])
-        plot_evolution(ax4, x_axis, T_comp[1:, case], label = Titles[case][1:], \
+        plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
     
-    for ax in [ax2, ax3, ax4]:
+    for ax in [ax2, ax3,  ax6]:
         ax.set_yscale('log')
 
-    ax4.set_xlabel('Step', fontsize = label_size)
+    ax6.set_xlabel('Step', fontsize = label_size)
 
-    ax2.set_ylabel('Energy Error', fontsize = label_size)
-    ax3.set_ylabel('Energy Error Local', fontsize = label_size)
-    ax4.set_ylabel('Computation time (s)', fontsize = label_size)
+    ax2.set_ylabel(r'$\Delta E_{Bridge}$ ', fontsize = label_size)
+    ax3.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    ax6.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
     
     ax2.legend(fontsize = label_size -3)
 
@@ -498,7 +500,7 @@ if __name__ == '__main__':
             name = '_action'+str(act)
             NAMES.append(name)
             env.settings['Integration']['suffix'] = NAMES[act]
-            run_trajectory(env, action = act)
+            # run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
@@ -528,7 +530,7 @@ if __name__ == '__main__':
                 NAMES.append(name)
                 env.settings['Integration']['suffix'] = name
                 env.settings['InitialConditions']['seed'] = seeds[i]
-                # run_trajectory(env, action = j) # Choose an action in between
+                run_trajectory(env, action = j) # Choose an action in between
 
         STATE = []
         CONS = []
