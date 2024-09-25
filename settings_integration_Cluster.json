@@ -5,48 +5,50 @@
        "seed": 1,
        "n_bodies": 5, 
        "ranges_mass": [1, 100],
-       "radius_cluster": 0.3,
+       "radius_cluster": 0.1,
  	"virial_ratio": 0.3,
 	"disk_radius": [10, 50],
 	"mass_disk": 0.02
     },
     "Integration":
-    {
+    { 
         "savefile": "./Cluster_Testing_results/",
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 20,
-        "check_step": 0.1, 
-        "t_step_global": 1e-3,
-        "t_step_local": 1e-3,
+        "max_steps": 100,
+        "check_step": 0.01, 
+        "t_step_global": 1e-2,
+        "t_step_local": 1e-1,
         "integrator_global": "Ph4",
         "integrator_local": "Huayno",
-        "max_error_accepted": 1e1,
+        "max_error_accepted": 1e-1,
         "plot": false
     },
     "RL":
     {
-        "state": "cart",
-        "state_options_info": ["norm", "cart", "dist"],
+        "state": "potential",
+        "state_options_info": ["norm", "cart", "dist", "potential"],
         "action": "range", 
-        "number_actions": 4,
-	"range_action": [1e-4, 1e-1],
-	"reward_f": 4,
-        "weights": [1.0, 10, 30.0, 1.0e-2]
+        "number_actions": 11,
+	"range_action": [1e-6, 1e-2],
+	"reward_f": 1,
+        "weights": [500.0, 10, 1.0]
      },
 
     "Training":
     {
+    	"RemovePlanets": true,
     	"savemodel": "./Training_Results/",
     	"subfolder": "",
     	"suffix":"",
     	"display": true,
-        "max_episodes": 300,
-        "hidden_layers": 3,
-        "neurons": 100,
-        "lr": 5e-4,
-        "batch_size": 128,
+        "max_episodes": 1000,
+        "testdata_size": 5,
+        "hidden_layers": 5,
+        "neurons": 200,
+        "lr": 1e-3,
+        "batch_size": 1000,
         "gamma": 0.99,
         "eps_start": 0.9,
         "eps_end": 0.05,

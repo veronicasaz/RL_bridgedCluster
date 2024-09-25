@@ -14,24 +14,27 @@ from IPython.display import clear_output
 
 import gym
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+torch.manual_seed(0)
 import numpy as np
+import random
+import time
+import math
 
 import matplotlib.pyplot as plt
 import matplotlib
 import torch.optim as optim
 
+
 from collections import namedtuple, deque
 from itertools import count
 
-from helpfunctions import load_json
-from TrainingFunctions import DQN, \
-                            ReplayMemory,\
-                            select_action, \
-                            optimize_model,\
-                            plot_durations
 
-
-def train_net(env = None, suffix = ''):
+def train_net(env = None, suffix = '', pretrained = False):
+    """"
+    pretrained: False or model path
+    """
     # Environment
     if env == None:
         # env = gym.make('bridgedparticles:ThreeBody-v0') # create the env once it's been registered
@@ -59,6 +62,7 @@ def train_net(env = None, suffix = ''):
     NEURONS = env.settings['Training']['neurons']
     LAYERS = env.settings['Training']['hidden_layers']
     env.settings['Integration']['savestate'] = False
+    env.settings['Training']['display'] = False
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n # TODO: test
@@ -69,6 +73,8 @@ def train_net(env = None, suffix = ''):
     # Create nets
     policy_net = DQN(n_observations, n_actions, NEURONS, LAYERS).to(device)
     target_net = DQN(n_observations, n_actions, NEURONS, LAYERS).to(device)
+    if pretrained != False:
+        policy_net.load_state_dict(torch.load(pretrained))
     target_net.load_state_dict(policy_net.state_dict())
 
     Transition = namedtuple('Transition',
@@ -88,7 +94,13 @@ def train_net(env = None, suffix = ''):
     # lists to save training progress
     save_reward = list()
     save_EnergyE = list()
+    save_EnergyEbridge = list()
     save_huberloss = list()
+    save_tcomp = list()
+    save_test_reward = list()
+    max_reward = np.ones(10)*(-10000)
+    save_training_time = [0]
+    time_0 = time.time()
 
     # Training loop
     while episode_number <= env.settings['Training']['max_episodes']:
@@ -101,7 +113,9 @@ def train_net(env = None, suffix = ''):
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         save_reward_list = list()
         save_EnergyE_list = list()
+        save_tcomp_list = list()
         save_huberloss_list = list()
+        save_EnergyEbridge_list = list()
 
         # Do first step without updating the networks and with the best step
         action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, 0)
@@ -114,7 +128,9 @@ def train_net(env = None, suffix = ''):
             observation, reward_p, terminated, info = env.step(action.item())
             save_reward_list.append(reward_p)
             save_EnergyE_list.append(info['Energy_error'])
-
+            save_EnergyEbridge_list.append(info['Energy_error_bridge'])
+            save_tcomp_list.append(info['tcomp'])
+            
             reward = torch.tensor([reward_p], device=device)
             if terminated:
                 next_state = None
@@ -144,18 +160,37 @@ def train_net(env = None, suffix = ''):
             for key in policy_net_state_dict:
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
-
         env.close()
 
+        # if episode_number %10 == 0:
+        test_reward_list = test_network(env, policy_net)
+        # else:
+        #     test_reward_list = np.zeros((env.settings['Training']['testdata_size'], 4)).flatten()
+        # test_reward_list = save_reward_list #TODO eliminate
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)
+        save_EnergyEbridge.append(save_EnergyEbridge_list)
         save_huberloss.append(save_huberloss_list)
+        save_tcomp.append(save_tcomp_list)
+        save_test_reward.append(test_reward_list)
+        save_training_time.append(time.time()-time_0)
         
-        if episode_number %100 == 0:
+        if episode_number %20 == 0:
             torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +suffix+ 'model_weights'+str(episode_number)+'.pth') # save model
         else:
             torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +suffix+ 'model_weights.pth') # save model
+
+        # Save model if reward is max
+        avg_reward = np.mean(test_reward_list)
+        if avg_reward > min(max_reward):
+            indx = np.where(max_reward == min(max_reward))[0]
+            if len(indx) > 1:
+                indx = indx[0]
+            max_reward[indx] =  avg_reward
+            torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +suffix+ 'model_weights'+str(episode_number)+'.pth') # save model
+        if episode_number %100 == 0:
+            max_reward = np.ones(10)*(-10000) # reset values
 
         # save training
         with open(env.settings['Training']['savemodel']+suffix+"rewards.txt", "w") as f:
@@ -170,16 +205,244 @@ def train_net(env = None, suffix = ''):
                     f.write(str(s) +" ")
                 f.write("\n")
 
+        with open(env.settings['Training']['savemodel']+suffix+"EnergyError_bridge.txt", "w") as f:
+            for ss in save_EnergyEbridge:
+                for s in ss:
+                    f.write(str(s) +" ")
+                f.write("\n")
+
+        with open(env.settings['Training']['savemodel']+suffix+"Tcomp.txt", "w") as f:
+            for ss in save_tcomp:
+                for s in ss:
+                    f.write(str(s) +" ")
+                f.write("\n")
+
         with open(env.settings['Training']['savemodel']+suffix+"HuberLoss.txt", "w") as f:
             for ss in save_huberloss:
                 for s in ss:
                     f.write(str(s) +" ")
                 f.write("\n")
 
+        with open(env.settings['Training']['savemodel']+suffix+"TestReward.txt", "w") as f:
+            for ss in save_test_reward:
+                for s in ss:
+                    f.write(str(s) +" ")
+                f.write("\n")
+
+        with open(env.settings['Training']['savemodel']+suffix+"TrainingTime.txt", "w") as f:
+            for ss in save_training_time:
+                f.write(str(ss) +" ")
+                
         episode_number += 1
 
     env.close()
     print('Complete')
+    
+
+class ReplayMemory(object):
+    def __init__(self, capacity, Transition = None):
+        """
+        ReplayMemory: create sample database from memory
+        INPUTS:
+            capacity: maximum length 
+            Transition: 
+        """
+        self.memory = deque([], maxlen=capacity)
+        
+        self.Transition = Transition
+
+    def push(self, *args):
+        """
+        push: save a transition
+        """
+        self.memory.append(self.Transition(*args))
+
+    def sample(self, batch_size):
+        """
+        sample: take a random sample from the memory
+        INPUTS:
+            batch_size: size of the batch to be taken
+        """
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        """
+        __len__: length of the memory array
+        """
+        return len(self.memory)
+    
+
+class DQN(nn.Module):
+    def __init__(self, n_observations, n_actions, neurons, layers):
+        """
+        DQN: creation of the networks
+        INPUTS:
+            n_observations: number of observations to use as input
+            n_actions: number of actions to use as output size
+            settings: dictionary with specific network settings
+        """
+        super(DQN, self).__init__()
+        self.neurons = int(neurons)
+        
+        self.layer1 = nn.Linear(n_observations, self.neurons)
+        self.layer2 = nn.Linear(self.neurons, self.neurons)
+        self.layer3 = nn.Linear(self.neurons, n_actions)
+
+        if layers == None:
+            self.hidden_layers = self.settings['Training']['hidden_layers']
+        else:
+            self.hidden_layers = int(layers)
+
+
+    # Called with either one element to determine next action, or a batch
+    # during optimization. Returns tensor([[left0exp,right0exp]...]).
+    def forward(self, x):
+        """
+        forward: add layers to the network
+        INPUTS:
+            x: input
+        OUTPUTS:
+            output
+        """
+        x = F.relu(self.layer1(x))
+        for i in range(self.hidden_layers):
+            x = F.relu(self.layer2(x))
+        return self.layer3(x)
+    
+
+def select_action(state, policy_net, Eps, env, device, steps_done):
+    """
+    select_action: choose best action 
+    INPUTS:
+        state: state of the system. Input of the network
+        policy_net: network with current weight values
+        Eps: eps parameter
+        env: environment
+        device: devie
+        steps_done: number of steps already done
+    OUTPUTS: 
+        action
+    """
+    EPS_START, EPS_END, EPS_DECAY = Eps
+    # global steps_done
+    sample = random.random()
+    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * steps_done / EPS_DECAY)
+    steps_done += 1
+    if sample > eps_threshold:
+        with torch.no_grad():
+            # t.max(1) will return the largest column value of each row.
+            # second column on max result is index of where max element was
+            # found, so we pick action with the larger expected reward.
+            return policy_net(state).max(1)[1].view(1, 1), steps_done
+    else:
+        return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long), steps_done
+
+def optimize_model(policy_net, target_net, memory, \
+                   Transition, device, GAMMA, BATCH_SIZE,\
+                   optimizer):
+    """
+    optimize_model: optimize trained model
+    INPUTS: 
+        policy_net: policty network
+        target_net: target network
+        memory: memory with all the training samples
+        Transition:
+        device:
+        GAMMA: gamma parameter
+        BATCH_SIZE: batch size
+        optimizer: optimization algorithm
+    OUTPUTS:
+        loss: loss
+    """
+    if len(memory) < BATCH_SIZE:
+        return
+    transitions = memory.sample(BATCH_SIZE)
+    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+    # detailed explanation). This converts batch-array of Transitions
+    # to Transition of batch-arrays.
+    batch = Transition(*zip(*transitions))
+
+    # Compute a mask of non-final states and concatenate the batch elements
+    # (a final state would've been the one after which simulation ended)
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                          batch.next_state)), device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state
+                                                if s is not None])
+    state_batch = torch.cat(batch.state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+    # columns of actions taken. These are the actions which would've been taken
+    # for each batch state according to policy_net
+    state_action_values = policy_net(state_batch).gather(1, action_batch)
+
+    # Compute V(s_{t+1}) for all next states.
+    # Expected values of actions for non_final_next_states are computed based
+    # on the "older" target_net; selecting their best reward with max(1)[0].
+    # This is merged based on the mask, such that we'll have either the expected
+    # state value or 0 in case the state was final.
+    next_state_values = torch.zeros(BATCH_SIZE, device=device)
+    with torch.no_grad():
+        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0]
+    # Compute the expected Q values
+    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+    # Compute Huber loss
+    criterion = nn.SmoothL1Loss()
+    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+    # Optimize the model
+    optimizer.zero_grad()
+    loss.backward()
+    # In-place gradient clipping
+    torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
+    optimizer.step()
+
+    return loss
+
+def test_network(env, model): #TODO: adappt with env
+    """
+    test_network: test the performance of a model during training on a test dataset
+    INPUTS:
+        env: environment being used
+        model: RL model to be evaluated
+    OUTPUTS: 
+        Reward: Reward value, energy error and computation time for each test case 
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    print("Testing...")
+    test_samples = env.settings['Training']['testdata_size']
+    Reward = np.zeros((test_samples, 4)) # R, E, Ebridge, Tcomp
+    for testcase in range(test_samples): # for each test case
+        env.settings['InitialConditions']['seed'] = testcase
+        state, info = env.reset()
+
+        tcomp = 0
+        rew = 0
+        terminated = False
+        steps = 0
+        while terminated == False: #steps 
+            steps += 1
+            # state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+            state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+            action = model(state).max(1)[1].view(1, 1)
+            state, reward, terminated, info = env.step(action.item())
+
+            tcomp += info['tcomp']
+            rew += reward
+
+        env.close()
+            
+        Reward[testcase, 0] = rew/steps # cumulative reward normalized by the number of steps reached
+        Reward[testcase, 1] = info['Energy_error'] # last energy error
+        Reward[testcase, 2] = info['Energy_error_bridge'] # last energy error
+        Reward[testcase, 3] = tcomp/steps  # normalized by the number of steps reached
+    
+    print("Testing finished")
+    return Reward.flatten()
+
 
 if __name__ == '__main__':
     train_net()

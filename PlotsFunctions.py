@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 
-from TrainingFunctions import DQN
+from TrainRL import DQN
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
-        'mediumslateblue', 'deepskyblue', 'navy']
+        'mediumslateblue', 'deepskyblue', 'navy', 'black']
 colors2 = ['navy']
 lines = ['-', '--', ':', '-.' ]
 markers = ['o', 'x', '.', '^', 's']
@@ -99,15 +99,15 @@ def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, st
     size_marker = np.log10(M)/10
     for j in range(n_planets):
         ax.scatter(X[0, j], Y[0, j], s = 20*size_marker[j],\
-                c = colors[j%len(colors)], \
+                c = colors[(j+4)%len(colors)], \
                     label = "Particle "+ name_planets[j])
         ax.plot(X[:, j], Y[:, j], marker = None, 
                     markersize = size_marker[j], \
                     linestyle = '-',\
-                    color = colors[j%len(colors)], \
+                    color = colors[(j+4)%len(colors)], \
                     alpha = 0.1)
         ax.scatter(X[:, j], Y[:, j], marker = marker, s = size_marker[j], \
-                    c = colors[j%len(colors)])        
+                    c = colors[(j+4)%len(colors)])        
         
     if legend_on == True:
         ax.legend(fontsize = labelsize)
@@ -165,11 +165,11 @@ def plot_distance_to_one(ax, x_axis, state, labelsize = 12,
     
     last_index = np.where(state[0, :, 8] == 1)[0][0]
     r0 = state[0:steps, last_index, 2:5]
-    for i in range(0, last_index):
+    for i in range(0, last_index): # for ecah particle except for the last one
         r1 = state[0:steps, i, 2:5]
         m = state[0, i, 1]
         Dist.append(np.linalg.norm(r0-r1, axis = 1))
-        Labels.append('Particle %i'%(i))
+        Labels.append('Particle %i-%i'%(i+1, last_index+1))
         
         size_marker = np.log(m)/30
     for i in range(len(Dist)):
@@ -179,6 +179,42 @@ def plot_distance_to_one(ax, x_axis, state, labelsize = 12,
     # ax.set_yscale('log')
 
     return Dist
+
+def plot_diff_state(ax1, ax2,  x_axis, state1, state2, labelsize = 12, 
+                         legend = True):
+    """
+    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        x_axis: time or steps to be plotted in the x axis
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+    """
+    steps = len(x_axis)
+    Diff_r = []
+    Diff_v = []
+    Labels = []
+    
+    particles = np.shape(state1)[1]
+    for i in range(particles): # for ecah particle except for the last one
+        r0 = state1[0:steps, i, 2:5]
+        r1 = state2[0:steps, i, 2:5]
+        v0 = state1[0:steps, i, 5:]
+        v1 = state2[0:steps, i, 5:]
+        Diff_r.append(np.linalg.norm(r0-r1, axis = 1))
+        Diff_v.append(np.linalg.norm(v0-v1, axis = 1))
+        Labels.append('Particle %i'%(i+1))
+        
+    for i in range(len(Diff_r)):
+        ax1.plot(x_axis, Diff_r[i], label = Labels[i], linewidth = 2.5)
+        ax2.plot(x_axis, Diff_v[i], label = Labels[i], linewidth = 2.5)
+    if legend == True:
+        ax1.legend(fontsize =labelsize, framealpha = 0.5)
+    # ax.set_yscale('log')
+
+    return Diff_r, Diff_v
 
 def plot_actions_taken(ax, x_axis, y_axis):
     """
@@ -194,7 +230,7 @@ def plot_actions_taken(ax, x_axis, y_axis):
     ax.grid(axis='y')
 
 def plot_evolution(ax, x_axis, y_axis, label = None, color = None, 
-                   colorindex = None, linestyle = None, linewidth = 1):
+                   colorindex = None, linestyle = None, linewidth = 1, alpha = 1):
     """
     plot_evolution: plot steps vs another measurement
     INPUTS:
@@ -210,4 +246,4 @@ def plot_evolution(ax, x_axis, y_axis, label = None, color = None,
     if colorindex != None:
         color = colors[(colorindex+2)%len(colors)] # start in the blues
     ax.plot(x_axis, y_axis, color = color, linestyle = linestyle, label = label, 
-            linewidth = linewidth)
+            linewidth = linewidth, alpha = alpha)

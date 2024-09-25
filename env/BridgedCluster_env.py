@@ -124,20 +124,23 @@ class Modified_Bridge(bridge):
 class Cluster_env(gym.Env):
     def __init__(self, render_mode = None):
         self.settings = load_json("./settings_integration_Cluster.json")
-
         self.n_bodies = self.settings['InitialConditions']['n_bodies']
 
+        
         self._initialize_RL()
 
-
     def _initialize_RL(self):
+
         # STATE
         if self.settings["RL"]["state"] == 'cart':
             self.observation_space_n = 4*self.n_bodies+1
-            self.observation_space = gym.spaces.Box(low=np.array([-np.inf]*self.observation_space_n), \
+            
+        elif self.settings["RL"]["state"] == 'potential':
+            self.observation_space_n = 3
+
+        self.observation_space = gym.spaces.Box(low=np.array([-np.inf]*self.observation_space_n), \
                                                 high=np.array([np.inf]*self.observation_space_n), \
                                                 dtype=np.float64)
-        # elif self.settings["RL"]["state"] == 'averaged':
             
         # ACTION
         # From a range of paramters
@@ -183,10 +186,12 @@ class Cluster_env(gym.Env):
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         #stars=new_plummer_model(N,convert_nbody=converter)
+        print(self.settings['InitialConditions']['seed'])
         stars = new_fractal_cluster_model(self.settings['InitialConditions']['n_bodies'],
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
                                         random_seed = self.settings['InitialConditions']['seed'])
+
         stars.mass = masses
         stars.name = "star"
         stars.type = "star"
@@ -219,8 +224,9 @@ class Cluster_env(gym.Env):
         planets.velocity += sun.velocity
 
         planetary_system = Particles()
-        planetary_system.add_particles(planets)
         planetary_system.add_particle(sun)
+        if self.settings['Training']['RemovePlanets'] == False:
+            planetary_system.add_particles(planets)
 
         #################################
         # All together
@@ -228,7 +234,10 @@ class Cluster_env(gym.Env):
         cluster.add_particles(stars)
         cluster.add_particle(sun)
         self.n_stars = len(cluster)
-        cluster.add_particles(planets)
+        self.index_planetarystar = self.n_stars-1
+
+        if self.settings['Training']['RemovePlanets'] == False:
+            cluster.add_particles(planets)
 
         return stars, planetary_system, cluster
 
@@ -245,12 +254,16 @@ class Cluster_env(gym.Env):
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
         """
+        self.iteration = 0
+        self.t_cumul = 0.0 # cumulative time for integration
+
         # Select units
         self.units()
 
         # Same time step for the integrators and the bridge
         self.particles_global, self.particles_local, \
-            self.particles_joined = self._initial_conditions_bridge()
+        self.particles_joined = self._initial_conditions_bridge()
+        
 
         # TODO: tstep not implemented for now
         self.grav_global = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
@@ -260,7 +273,8 @@ class Cluster_env(gym.Env):
             
         # Bridge creation
         # self.grav_bridge = bridge.Bridge(verbose = False, use_threading=False)
-        self.grav_bridge = Modified_Bridge()
+        # self.grav_bridge = Modified_Bridge()
+        self.grav_bridge = bridge()
         self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
 
@@ -272,17 +286,15 @@ class Cluster_env(gym.Env):
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
         self.E_0_total = \
-            self._get_info(self.particles_joined, 0, initial = True)
+            self._get_info(self.particles_joined, initial = True)
         self.E_total_prev = self.E_0_total
         
         # Create state vector
-        state_RL = self._get_state(self.particles_joined, 1) # |r_i|, |v_i|
+        state_RL = self._get_state(self.particles_joined[0:self.n_stars], 1) # |r_i|, |v_i|
 
         # Initialize time
         self.grav_bridge.timestep = self.actions[0] | self.units_time
         self.check_step = self.settings['Integration']['check_step']
-        self.iteration = 0
-        self.t_cumul = 0.0 # cumulative time for integration
 
         # Plot trajectory
         if self.settings['Integration']['plot'] == True:
@@ -292,12 +304,12 @@ class Cluster_env(gym.Env):
         if self.settings['Integration']['savestate'] == True:
             steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
             self.state = np.zeros((steps, self.n_bodies_total, 9)) # action, mass, rx3, vx3, name
-            self.cons = np.zeros((steps, 4)) # action, reward, E
+            self.cons = np.zeros((steps, 4)) # action, reward, E,  t
             self.comp_time = np.zeros(steps) # computation time
             self._savestate(0, 0, self.particles_joined, [1.0, 1.0],\
                              0.0, 0.0) # save initial state
 
-        self.info_prev = [0.0]
+        self.info_prev = [0.0, 0.0]
         return state_RL, self.info_prev
     
     def step(self, action):
@@ -313,6 +325,7 @@ class Cluster_env(gym.Env):
         """
         self.iteration += 1
         self.t_cumul += self.check_step # add the previous simulation time
+        # self.t_cumul += self.actions[action] # add the previous simulation time
         t = (self.t_cumul) | self.units_time
 
         # Apply action
@@ -326,9 +339,12 @@ class Cluster_env(gym.Env):
             self.channel[chan].copy()
             
         # Get information for the reward
-        info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
-        state = self._get_state(self.particles_joined, info_error[0])
-        reward = self._calculate_reward(info_error[0], self.info_prev[0], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
+        # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
+        info_error = self._get_info(self.particles_joined)
+        state = self._get_state(self.particles_joined[0:self.n_stars], info_error[1])
+        # reward = self._calculate_reward(info_error[0], self.info_prev[0], self.E_total,  T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
+        # Using total energy
+        reward = self._calculate_reward(info_error[1], self.info_prev[1], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
         
         if self.settings['Integration']['savestate'] == True:
@@ -337,7 +353,7 @@ class Cluster_env(gym.Env):
                             T, reward) # save initial state
         
         # finish experiment if max number of iterations is reached
-        if (abs(info_error[0]) > self.settings['Integration']['max_error_accepted']) or\
+        if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
             # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
@@ -354,7 +370,9 @@ class Cluster_env(gym.Env):
 
         info = dict()
         info['TimeLimit.truncated'] = False
-        info['Energy_error'] = info_error[0]
+        info['Energy_error'] = info_error[1]
+        info['Energy_error_rel'] = info_error[0]
+        info['tcomp'] = T
 
         return state, reward, terminated, info
     
@@ -397,7 +415,7 @@ class Cluster_env(gym.Env):
             bodies.add_particles(particles_vector[i])
         return bodies
     
-    def _initialize_integrator(self, action, integrator_type):
+    def _initialize_integrator(self, tstep, integrator_type):
         """
         _initialize_integrator: initialize chosen integrator with the converter and parameters
         INPUTS:
@@ -415,6 +433,7 @@ class Cluster_env(gym.Env):
                 g = Hermite(self.converter)
             else:
                 g = Hermite()
+            g.parameters.dt_param = tstep
             # Collision detection and softening
             # g.stopping_conditions.timeout_detection.enable()
             # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2
@@ -423,12 +442,14 @@ class Cluster_env(gym.Env):
                 g = ph4(self.converter, number_of_workers = 1)
             else:
                 g = ph4()
+            g.parameters.timestep_parameter =  tstep
             # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
         elif integrator_type == 'Huayno': 
             if self.settings['InitialConditions']['units'] == 'si':
                 g = Huayno(self.converter)
             else:
                 g = Huayno()
+            g.parameters.timestep_parameter =  tstep
             # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
         elif integrator_type == 'Symple': 
             if self.settings['InitialConditions']['units'] == 'si':
@@ -436,10 +457,12 @@ class Cluster_env(gym.Env):
             else:
                 g = symple(redirection ='none')
             g.initialize_code()
+            # g.parameters.timestep = tstep | self.units_time
             
         return g 
     
-    def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
+    # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
+    def _get_info(self, particles, initial = False):
         """
         _get_info: get energy error, angular momentum error at current state
         OUTPUTS:
@@ -454,16 +477,17 @@ class Cluster_env(gym.Env):
             return E_total
         else:
             # Delta_E_total = (E_total - self.E_0_total)
-            Delta_E_total = (E_total - self.E_total_prev)
-            Delta_E_bridge = Delta_E_total - energy_loss
-            self.E_total_prev = E_total
+            Delta_E_rel = (E_total - self.E_total_prev)
+            self.E_prev = E_total
+            # Delta_E_bridge = Delta_E_total - energy_loss
+            Delta_E_total = (E_total - self.E_0_total)/self.E_0_total
             # Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
             # Delta_L = (L - self.L_0) / self.L_0
             # return Delta_E_bridge/self.E_0_total, \
             # return Delta_E_bridge/self.E_0_total, \
             #       Delta_E_total/self.E_0_total
-            return Delta_E_bridge/self.E_0_total, \
-                  Delta_E_total/self.E_0_total,\
+            return Delta_E_rel/self.E_0_total, \
+                  Delta_E_total\
                     
 
     def _get_state(self, particles, E):  # TODO: change to include all particles?
@@ -507,6 +531,15 @@ class Cluster_env(gym.Env):
 
             state[-1] = -np.log10(abs(E))
 
+        elif self.settings['RL']['state'] == 'potential':
+            state = np.zeros(3) # potential, mass, energy error
+
+            pot = particles[self.index_planetarystar].potential()
+            pot_nbody = self.converter.to_generic(pot).value_in(nbody_system.length**2/nbody_system.time**2)
+            state[0] = pot_nbody
+            state[1] = particles_m_nbody[self.index_planetarystar]
+            state[2] = -np.log10(abs(E))
+
         return state
     
     def _calculate_reward(self, info, info_prev, T, action, W):
@@ -527,11 +560,13 @@ class Cluster_env(gym.Env):
         if Delta_E_prev == 0.0: # for the initial step
             return 0
         else:
-            if self.settings['RL']['reward_f'] == 0: # global energy and 1e-7 limit
-                a = -(W[0]* np.log10(abs(Delta_E)) + \
-                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev)))) *\
-                        (W[3]*1/abs(np.log10(action)) )
-                return a
+            
+            # if self.settings['RL']['reward_f'] == 0: 
+            #     a = -W[0]* np.log10(abs(E_total_sum)/1e-8)/\
+            #              abs(np.log10(abs(E_total_sum,)))**2 /self.iteration+\
+            #         -W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))) +\
+            #         W[2]/abs(np.log10(action)) 
+            #     return a
             
             # if self.settings['RL']['reward_f'] == 1:
             #     a = -W[0]*np.log10(abs(Delta_E)) -W[1]*np.log10(abs(Delta_E_local)) +\
@@ -540,26 +575,13 @@ class Cluster_env(gym.Env):
             #          W[3]*1/abs(np.log10(action))
             #     return a
             
-            elif self.settings['RL']['reward_f'] == 2:
-                a = -(W[0]* abs(np.log10(abs(Delta_E)/1e-8))/\
-                         abs(np.log10(abs(Delta_E)))**2 +\
-                         W[1]*(np.log10(abs(Delta_E))-np.log10(abs(Delta_E_prev))))+\
-                         W[3]*1/abs(np.log10(action))
+            if self.settings['RL']['reward_f'] == 1:
+                a = -W[0]* (np.log10(abs(Delta_E)/1e-10)/\
+                         abs(np.log10(abs(Delta_E)))**3/self.iteration) +\
+                         W[2]/abs(np.log10(action))
                 return a
 
-            elif self.settings['RL']['reward_f'] == 3:
-                a =  (Delta_E-Delta_E_prev)/abs(Delta_E)
-                b = -W[1]*(a/abs(a))*np.log10(abs(a)) +\
-                        W[3]*1/abs(np.log10(action))
-                return b
-                
-            elif self.settings['RL']['reward_f'] == 4:
-                # a = abs(Delta_E - Delta_E_prev)/abs(Delta_E_prev)
-                a = Delta_E
-                a = -W[0]*np.log10(abs(a)) + \
-                    W[3]/abs(np.log10(action))
-                return a
-    
+            
     def _display_info(self, info, reward, action):
         """
         _display_info: display information at every step
@@ -568,9 +590,9 @@ class Cluster_env(gym.Env):
             reward: value of the reward for the given step
             action: action taken at this step
         """
-        print("Iteration: %i/%i, E_E bridge = %0.3E, E_E total = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
+        print("Iteration: %i/%i, Delta E_E total = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
                                  self.settings['Integration']['max_steps'],\
-                                 info[0], info[1],\
+                                 info[1],\
                                  action, \
                                  reward))
             
