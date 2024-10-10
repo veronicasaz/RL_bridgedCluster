@@ -84,36 +84,34 @@ class Modified_Bridge(bridge):
                 index1 = np.where(x.particles.key == key)[0][0]
                 index2 = np.where(y.particles.key == key)[0][0]
                 self.particle_pairs[x] = [index1, index2]
-                # print(x.particles[index1])
-                # self.channel_particlepairs[x] = x.particles[index1].new_channel_to(y.particles[index2])
         
     def update_particles(self, x):
         "x is the system to update"
+
         for y in  self.partners[x]:
             # self.channel_particlepairs[x].copy()
             index1 = self.particle_pairs[x][0]
             index2 = self.particle_pairs[x][1]
-            # move planets accordingly
-            diff_r = x.particles[index1].position - self.previous_coords_r
-            diff_v = x.particles[index1].velocity - self.previous_coords_v
-            y.particles.position += diff_r
-            y.particles.velocity += diff_v
 
             # replace central particle
             y.particles[index2].mass = x.particles[index1].mass
             y.particles[index2].position = x.particles[index1].position
             y.particles[index2].velocity = x.particles[index1].velocity
 
-            
-        
     def remove_common(self, x, y):
         part = y.particles[self.particle_pairs[x][1]]
         # y.particles -= part
         y.particles[self.particle_pairs[x][1]].mass *= 0  # change so that it has no potential
         y.particles[self.particle_pairs[x][1]].position *= 0 
         y.particles[self.particle_pairs[x][1]].velocity *= 0 
-        self.previous_coords_r = y.particles[self.particle_pairs[x][1]].position
-        self.previous_coords_v = y.particles[self.particle_pairs[x][1]].velocity
+
+    def synchronize_particles(self):
+        for x in self.systems:
+            if self.do_sync[x]:
+                if hasattr(x,"synchronize_model"):
+                    if(self.verbose): print(x.__class__.__name__,"is synchronizing", end=' ')
+                    x.synchronize_model()    
+                    if(self.verbose):  print(".. done")
                 
     def evolve_joined_leapfrog(self,tend,timestep):
         self.find_common_particles()
@@ -122,25 +120,21 @@ class Modified_Bridge(bridge):
         self._drift_time=self.time
         self._kick_time=self.time
 
-
         while sign(timestep)*(tend - self.time) > sign(timestep)*timestep/2:      #self.time < (tend-timestep/2):
+            # one at a time
             for x in self.systems:
                 # print('=======Kick===========')
                 if first:      
                     self.kick_one_system(x, timestep/2)
+                    first = False
                 else:
                     self.kick_one_system(x, timestep)
-
                 # print('=======Drift===========')
                 self.drift_one_system(x, self.time+timestep)
-
                 # print('=======Update===========')
                 self.update_particles(x)
-                # if not first:
-                #     self.kick_one_system(x, timestep/2) 
-            first=False
+            self.synchronize_particles()
             self.time=self.time+timestep
-
         return 0
 
     def kick_one_system(self,x, dt):
@@ -286,7 +280,8 @@ class Cluster_env(gym.Env):
         self.n_stars = len(cluster)
         self.index_planetarystar = self.n_stars-1
         
-        # stars -= sun
+        if self.settings['Integration']["bridge"] == 'original':
+            stars -= sun
 
         if self.settings['Training']['RemovePlanets'] == False:
             cluster.add_particles(planets)
@@ -326,12 +321,14 @@ class Cluster_env(gym.Env):
         self.grav_local.particles.add_particles(self.particles_local)
 
         # Bridge creation
-        # self.grav_bridge = bridge()
-        self.grav_bridge = Modified_Bridge()
+        if self.settings['Integration']["bridge"] == 'original':
+            self.grav_bridge = bridge()
+        else:
+            self.grav_bridge = Modified_Bridge()
 
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,)) # particles without the sun
         self.grav_bridge.add_system(self.grav_global)
-        # self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
+        # self.grav_bridge.add_system(self.grav_global, (self.grav_local,)) # TODO: modified bridge does not work for this
 
         self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined), \
                         self.grav_local.particles.new_channel_to(self.particles_joined)
@@ -389,7 +386,7 @@ class Cluster_env(gym.Env):
         # Integrate
         t0_step = time.time()
 
-        self.grav_bridge.evolve_model(t | self.units_time, timestep = self.actions[action] | self.units_time)
+        self.grav_bridge.evolve_model(t, timestep = self.actions[action] | self.units_time)
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
         T = time.time() - t0_step
@@ -738,7 +735,6 @@ class Cluster_env(gym.Env):
         return L
 
 
-
     def reset_withoutBridge(self):
         """
         reset: reset the simulation 
@@ -819,7 +815,8 @@ class Cluster_env(gym.Env):
         # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
         t0_step = time.time()
-        self.grav.evolve_model(t | self.units_time)
+        self.grav.evolve_model(t)
+        self.channel.copy()
         T = time.time() - t0_step
             
         # Get information for the reward

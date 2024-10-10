@@ -12,14 +12,15 @@ import torch
 
 from env.BridgedCluster_env import Cluster_env
 from TrainRL import DQN
-from Plots_TestEnvironment import plot_trajs, plot_intializations, plot_rewards, plot_reward_comparison,\
-    plot_convergence, plot_trajs_reward
+from Plots_TestEnvironment import plot_trajs, \
+    plot_intializations, plot_rewards, plot_reward_comparison,\
+    plot_convergence, plot_trajs_reward, plot_convergence_togetherseeds
 
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
         'mediumslateblue', 'deepskyblue', 'navy']
 
-def run_trajectory(env, action = 'RL', model_path = None):
+def run_trajectory(env, action = 'RL', model_path = None, bridge = True):
     """
     run_trajectory: Run one initialization with RL or with an integrator
     INPUTS:
@@ -38,7 +39,8 @@ def run_trajectory(env, action = 'RL', model_path = None):
     if model_path == None:
         model_path = env.settings['Training']['savemodel'] +'model_weights.pth'
         
-    state, info = env.reset()
+    if bridge == True:
+        state, info = env.reset()
     i = 0
     terminated = False
 
@@ -69,6 +71,12 @@ def run_trajectory(env, action = 'RL', model_path = None):
         env.close()
     
     # Case 3: fixed action throughout the simulation
+    if bridge == False:
+        env.reset_withoutBridge()
+        while terminated == False:
+            x, y, terminated, zz = env.step_withoutBridge(action)
+            i += 1
+        env.close_withoutBridge()
     else:
         while terminated == False:
             x, y, terminated, zz = env.step(action)
@@ -97,7 +105,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 6 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -114,23 +122,25 @@ if __name__ == '__main__':
     elif experiment == 1: # run bridge for all actions
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions/'
-        env.settings['InitialConditions']['seed'] = 1
+        env.settings['InitialConditions']['seed'] = 2
         env.settings['Training']['RemovePlanets'] = False
+        env.settings['Integration']['max_steps'] = 40
+        env.settings['Integration']["max_error_accepted"] = 1e10
 
         NAMES = []
-        # for act in range(1):
-        for act in range(env.settings['RL']['number_actions']):
+        for act in range(1):
+        # for act in range(env.settings['RL']['number_actions']):
             print("Action", env.actions[act])
             name = '_action'+str(act)
             NAMES.append(name)
             env.settings['Integration']['suffix'] = NAMES[act]
-            # run_trajectory(env, action = act)
+            run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
         TCOMP = []
-        # for act in range(1):
-        for act in range(env.settings['RL']['number_actions']):
+        for act in range(1):
+        # for act in range(env.settings['RL']['number_actions']):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)
@@ -143,7 +153,56 @@ if __name__ == '__main__':
 
     elif experiment == 2: # run convergence study
         env = Cluster_env()
-        env.settings['Integration']['subfolder'] = '1_run_convergence/seed1_2/'
+        env.settings['Integration']['subfolder'] = '1_run_convergence/seed1_3/'
+        env.settings['InitialConditions']['seed'] = 1
+        env.settings['Training']['RemovePlanets'] = False
+        env.settings['Integration']['max_steps'] = 40
+        env.settings['Integration']["max_error_accepted"] = 1e10
+
+
+        max_actions = 9
+        env.settings['RL']['number_actions'] = 6 #limit how many actions we choose
+        env.settings['RL']["range_action"] = [1e-5, 1e-2]
+        env._initialize_RL()
+
+        # actions = np.zeros(max_actions)
+        # prev_action = env.actions[0]
+        # for act in reversed(range(5)):
+        #     actions[act] = prev_action/2
+        #     prev_action = actions[act]
+        # actions[5:] = env.actions
+        # env.actions = actions
+        # env.settings['RL']['number_actions'] = max_actions
+
+        NAMES = []
+        for act in range(env.settings['RL']['number_actions']):
+            print("Action", env.actions[act])
+            name = '_action_%0.2E'%(env.actions[act])
+            NAMES.append(name)
+            env.settings['Integration']['suffix'] = name
+            run_trajectory(env, action = act)
+
+        STATE = []
+        CONS = []
+        TCOMP = []
+        TITLES = []
+        for act in range(env.settings['RL']['number_actions']):
+            env.settings['Integration']['suffix'] = NAMES[act]
+            state, cons, tcomp = load_state_files(env)
+            STATE.append(state)
+            CONS.append(cons)
+            TCOMP.append(tcomp)
+            TITLES.append(r"$\Delta t$ = %.2E Myr"%(env.actions[act]))
+
+        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'Action_comparison'
+        plot_convergence(env, STATE, CONS, TCOMP, TITLES, save_path)
+        plot_trajs_reward(env, STATE, CONS, TCOMP, TITLES, save_path)
+
+    
+    elif experiment == 3: # put together convergence study for different seeds
+        env = Cluster_env()
+        env.settings['Integration']['subfolder'] = '1_run_convergence/'
         env.settings['InitialConditions']['seed'] = 1
         env.settings['Training']['RemovePlanets'] = False
         env.settings['Integration']['max_steps'] = 40
@@ -165,77 +224,40 @@ if __name__ == '__main__':
         env.settings['RL']['number_actions'] = max_actions
 
         NAMES = []
-        for act in (range(env.settings['RL']['number_actions'])):
-            print("Action", env.actions[act])
+        for act in range(env.settings['RL']['number_actions']):
             name = '_action_%0.2E'%(env.actions[act])
             NAMES.append(name)
-            env.settings['Integration']['suffix'] = name
-            run_trajectory(env, action = act)
-
-        STATE = []
-        CONS = []
-        TCOMP = []
-        TITLES = []
-        for act in range(env.settings['RL']['number_actions']):
-            env.settings['Integration']['suffix'] = NAMES[act]
-            state, cons, tcomp = load_state_files(env)
-            STATE.append(state)
-            CONS.append(cons)
-            TCOMP.append(tcomp)
-            TITLES.append(r"$\Delta t$ = %.2E Myr"%(env.actions[act]))
-
-        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
-            'Action_comparison'
-        plot_convergence(env, STATE, CONS, TCOMP, TITLES, save_path)
-        plot_trajs_reward(env, STATE, CONS, TCOMP, TITLES, save_path)
-    
-    elif experiment == 3: # put together convergence study for different seeds
-        env = Cluster_env()
-        env.settings['Integration']['subfolder'] = '1_run_convergence/seed1_2/'
-        env.settings['InitialConditions']['seed'] = 1
-        env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 100
-        env.settings['Integration']["max_error_accepted"] = 1e10
 
 
-        max_actions = 9
-        env.settings['RL']['number_actions'] = 4 #limit how many actions we choose
-        env.settings['RL']["range_action"] = [1e-4, 1e-2]
-        env._initialize_RL()
+        seed_folder = ['seed1_2/', 'seed2_2/', 'seed3_2/', 'seed4/']
+        # seed_folder = ['seed1_2/','seed2_2/']
+        STATE_list = []
+        CONS_list = []
+        TCOMP_list = []
+        TITLES_list = []
+        for j in range(len(seed_folder)):
+            env.settings['Integration']['subfolder'] = '1_run_convergence/' + seed_folder[j]
+            STATE = []
+            CONS = []
+            TCOMP = []
+            TITLES = []
+            for act in range(env.settings['RL']['number_actions']):
+                env.settings['Integration']['suffix'] = NAMES[act]
+                state, cons, tcomp = load_state_files(env)
+                STATE.append(state)
+                CONS.append(cons)
+                TCOMP.append(tcomp)
+                TITLES.append(r"$\Delta t$ = %.2E Myr"%(env.actions[act]))
 
-        actions = np.zeros(max_actions)
-        prev_action = env.actions[0]
-        for act in reversed(range(5)):
-            actions[act] = prev_action/2
-            prev_action = actions[act]
-        actions[5:] = env.actions
-        env.actions = actions
-        env.settings['RL']['number_actions'] = max_actions
+            STATE_list.append(STATE)
+            CONS_list.append(CONS)
+            TCOMP_list.append(TCOMP)
+            TITLES_list.append(TITLES)
 
-        NAMES = []
-        for act in reversed(range(env.settings['RL']['number_actions'])):
-            print("Action", env.actions[act])
-            name = '_action_%0.2E'%(env.actions[act])
-            NAMES.append(name)
-            env.settings['Integration']['suffix'] = name
-            run_trajectory(env, action = act)
-
-        STATE = []
-        CONS = []
-        TCOMP = []
-        TITLES = []
-        for act in range(env.settings['RL']['number_actions']):
-            env.settings['Integration']['suffix'] = NAMES[act]
-            state, cons, tcomp = load_state_files(env)
-            STATE.append(state)
-            CONS.append(cons)
-            TCOMP.append(tcomp)
-            TITLES.append(r"$\Delta t$ = %.2E Myr"%(env.actions[act]))
-
-        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
-            'Action_comparison'
-        plot_convergence(env, STATE, CONS, TCOMP, TITLES, save_path)
-        plot_trajs_reward(env, STATE, CONS, TCOMP, TITLES, save_path)
+        save_path = env.settings['Integration']['savefile'] + '1_run_convergence/'+\
+            'Convergence_comparison'
+        plot_convergence_togetherseeds(env, STATE_list, CONS_list, TCOMP_list, TITLES_list, save_path)
+        
 
     elif experiment == 4: # test different initializations
         env = Cluster_env()
@@ -302,9 +324,47 @@ if __name__ == '__main__':
         plot_reward_comparison(env, [STATE[action]], [CONS[action]], [TCOMP[action]], [NAMES[action]], save_path)
 
 
+    elif experiment == 6: # create baseline without bridge
+        env = Cluster_env()
+        env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
+        env.settings['InitialConditions']['seed'] = 2
+        env.settings['Training']['RemovePlanets'] = False
+        env.settings['Integration']['max_steps'] = 40
+        env.settings['Integration']["max_error_accepted"] = 1e10
 
+        NAMES = []
 
+        # Without bridge
+        name = '_nobridge'
+        NAMES.append(name)
+        env.settings['Integration']['suffix'] = NAMES[0]
+        # run_trajectory(env, action = 0, bridge = False) # Action does not affect
 
+        # # With bridge
+        name = '_orbridge'
+        NAMES.append(name)
+        env.settings['Integration']['suffix'] = NAMES[1]
+        env.settings['Integration']["bridge"] = 'original'
+        # run_trajectory(env, action = 0, bridge = True) # Action does not affect
 
-        
-        
+        # With modified bridge
+        name = '_modbridge'
+        NAMES.append(name)
+        env.settings['Integration']['suffix'] = NAMES[2]
+        env.settings['Integration']["bridge"] = 'modified'
+        run_trajectory(env, action = 0, bridge = True) # Action does not affect
+
+        STATE = []
+        CONS = []
+        TCOMP = []
+        for act in range(3):
+        # for act in range(env.settings['RL']['number_actions']):
+            env.settings['Integration']['suffix'] = NAMES[act]
+            state, cons, tcomp = load_state_files(env)
+            STATE.append(state)
+            CONS.append(cons)
+            TCOMP.append(tcomp)
+
+        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            'Action_comparison.png'
+        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path, subplots=3)

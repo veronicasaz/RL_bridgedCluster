@@ -16,24 +16,25 @@
         "subfolder": "",
         "suffix": "",
 	"savestate": true,
-        "max_steps": 100,
+        "max_steps": 50,
         "check_step": 0.01, 
         "t_step_global": 1e-2,
-        "t_step_local": 1e-1,
+        "t_step_local": 1e-2,
         "integrator_global": "Ph4",
         "integrator_local": "Huayno",
         "max_error_accepted": 1e-1,
-        "plot": false
+        "plot": false,
+        "bridge": "modified"
     },
     "RL":
     {
         "state": "potential",
         "state_options_info": ["norm", "cart", "dist", "potential"],
         "action": "range", 
-        "number_actions": 11,
-	"range_action": [1e-6, 1e-2],
+        "number_actions": 10,
+	"range_action": [5e-5, 1e-2],
 	"reward_f": 1,
-        "weights": [500.0, 10, 1.0]
+        "weights": [400.0, 1.0, 1.0]
      },
 
     "Training":
@@ -43,12 +44,12 @@
     	"subfolder": "",
     	"suffix":"",
     	"display": true,
-        "max_episodes": 1000,
-        "testdata_size": 5,
+        "max_episodes": 200,
+        "testdata_size": 3,
         "hidden_layers": 5,
         "neurons": 200,
-        "lr": 1e-3,
-        "batch_size": 1000,
+        "lr": 1e-2,
+        "batch_size": 25,
         "gamma": 0.99,
         "eps_start": 0.9,
         "eps_end": 0.05,

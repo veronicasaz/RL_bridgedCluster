@@ -244,6 +244,7 @@ def plot_test_reward(a, test_reward):
     ax[1].set_title(r'$log_{10}(\vert \Delta E\vert)$', fontsize = fontsize)
     ax[2].set_title(r'$log_{10}(\vert \Delta E_{bridge}\vert)$', fontsize = fontsize)
     # ax[2].set_title(r'$log_{10}(\vert \Delta E\vert) - log_{10}(\vert \Delta E_{prev}\vert)$', fontsize = fontsize)
+    ax[0].set_yscale('symlog', linthresh = 1e-1)
     ax[3].set_title(r'$T_{comp}$ (s)', fontsize = fontsize)
     ax[3].set_yscale('symlog', linthresh = 1e-1)
     ax[3].set_yscale('log')

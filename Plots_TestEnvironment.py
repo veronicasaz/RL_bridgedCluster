@@ -87,9 +87,9 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
 
         for case in range(len(STATES)):
             if case == PLOT: # make bold
-                linewidth = 2
+                linewidth = 3
             else:
-                linewidth = 1
+                linewidth = 3
             plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case][1:], \
                         colorindex = case, linestyle = linestyle[case], linewidth= linewidth)
             plot_evolution(ax5, x_axis, T_comp[1:, case], label = Titles[case], \
@@ -100,8 +100,10 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
 
         ax5.set_xlabel('Step', fontsize = label_size)
 
-        ax2.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[case], fontsize = label_size-4)
-        ax3.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[0], fontsize = label_size-4)
+        ax2.set_ylabel(r'$\vert \vec r_x -\vec r_{S_5}\vert$'+'\n'+Titles[case], fontsize = label_size-4)
+        # ax2.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[case], fontsize = label_size-4)
+        # ax3.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[0], fontsize = label_size-4)
+        ax3.set_ylabel(r'$\vert \vec r_x -\vec r_{S_5}\vert$'+'\n'+Titles[0], fontsize = label_size-4)
         ax4.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
         ax5.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
         
@@ -156,7 +158,8 @@ def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_ind
     
     
     # Plot trajectories 2D
-    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
     legend = True
     if plot_traj_index == 'bestworst':
         plot_traj_index = [0, len(STATES)-1] # plot best and worst
@@ -206,7 +209,7 @@ def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_ind
 
     ax6.set_xlabel('Step', fontsize = label_size)
 
-    ax2.set_ylabel(r'$\vert \vec r_x \vec r_S\vert$ ', fontsize = label_size)
+    ax2.set_ylabel(r'$\vert \vec r_x -\vec r_S\vert$ ', fontsize = label_size)
     ax3.set_ylabel(r'Action', fontsize = label_size)
     ax4.set_ylabel(r'R', fontsize = label_size)
     ax5.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
@@ -218,20 +221,25 @@ def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_ind
     plt.savefig(save_path, dpi = 150)
     plt.show()
 
-def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
+def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst', subplots = 2):
     # Setup plot
     label_size = 18
+    linewidth = 2
     fig = plt.figure(figsize = (10,15))
-    gs1 = matplotlib.gridspec.GridSpec(6, 2, 
+    gs1 = matplotlib.gridspec.GridSpec(6, subplots, 
                                     left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
                                     top = 0.88, bottom = 0.12)
     
     
     # Plot trajectories 2D
-    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
+
     legend = True
     if plot_traj_index == 'bestworst':
         plot_traj_index = [0, len(STATES)-1] # plot best and worst
+    if subplots == 3:
+        plot_traj_index= np.arange(3)
     for case_i, case in enumerate(plot_traj_index): 
         ax1 = fig.add_subplot(gs1[0, case_i])
         ax12 = fig.add_subplot(gs1[1, case_i])
@@ -244,10 +252,10 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
         ax1.set_ylabel('y (au)', fontsize = label_size)
         ax12.set_xlabel('x (au)', fontsize = label_size)
         ax12.set_ylabel('y (au)', fontsize = label_size)
-        if case == 0: 
+        if case_i == 0: 
             legend = False
-            ax1.legend(loc='upper center', bbox_to_anchor=(0.8, 1.7), \
-                       fancybox = True, ncol = 5, fontsize = label_size-2)
+            ax1.legend(loc='upper center', bbox_to_anchor=(1.0, 1.7), \
+                       fancybox = True, ncol = 4, fontsize = label_size-2)
         
 
     # Plot energy error
@@ -270,20 +278,22 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
                     #    colorindex = case, linestyle = '--', alpha = 0.5)
         # plot_evolution(ax2, x_axis, Energy_error[3][1:, case], \
         #                colorindex = case, linestyle = ':', alpha = 0.5)
-        plot_evolution(ax4, x_axis, Energy_error[3][1:, case], label = Titles[case][1:], \
-                       colorindex = case, linestyle = '-')
+        plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case][1:], \
+                       colorindex = case, linestyle = '-', linewidth = linewidth)
         plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case][1:], \
-                       colorindex = case, linestyle = '-')
+                       colorindex = case, linestyle = '-', linewidth = linewidth)
     
     for ax in [ax2, ax4,  ax6]:
         ax.set_yscale('log')
 
     ax6.set_xlabel('Step', fontsize = label_size)
 
-    ax2.set_ylabel(r'$\Delta E_{Bridge}$ ', fontsize = label_size)
-    ax3.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    # ax2.set_ylabel(r'$\Delta E_{Bridge}$ ', fontsize = label_size)
+    ax2.set_ylabel(r'$\vert \vec r_x -\vec r_S\vert$ ', fontsize = label_size)
+    ax3.set_ylabel(r'Action', fontsize = label_size)
+    ax4.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
     ax6.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
-    
+
     # ax3.legend(fontsize = label_size -3)
     ax6.legend(loc='upper center', bbox_to_anchor=(0.45, -0.38), \
                        fancybox = True, ncol = 3, fontsize = label_size-2)
@@ -481,7 +491,8 @@ def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_i
     
     
     # Plot trajectories 2D
-    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    name_bodies = name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
     legend = True
 
     # Plot energy error
@@ -615,7 +626,7 @@ def plot_state_diff(env, STATES, CONS, TCOMP, Titles, save_path):
     plot_distance_to_one(ax3, x_axis, STATES[0] ) # plot for RL one
     plot_distance_to_one(ax4, x_axis, STATES[1] ) # plot for most accurate one
     for case in range(len(STATES)):
-        plot_evolution(ax5, x_axis[1:], Energy_error[3][1:, case], label = Titles[case][1:], \
+        plot_evolution(ax5, x_axis[1:], Energy_error[1][1:, case], label = Titles[case][1:], \
                        colorindex = case, linestyle = linestyle[case])
         # plot_evolution(ax3, x_axis, Energy_error_local[1:, case], label = Titles[case][1:], \
         #                colorindex = case, linestyle = linestyle[case])

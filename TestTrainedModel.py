@@ -94,7 +94,8 @@ if __name__ == '__main__':
     if experiment == 0: # Train
         env = Cluster_env()
         env.settings['Training']['RemovePlanets'] = True # train without planets (they do not contribute to the total energy error)
-        train_net(suffix = "currentTraining/")
+        env.settings['Integration']['subfolder'] = 'currentTraining/'
+        train_net(env = env, suffix = "currentTraining/")
 
     elif experiment == 1:
         # Plot training results
@@ -110,18 +111,20 @@ if __name__ == '__main__':
         env = Cluster_env()
         if experiment == 2:
             env.settings['Integration']['subfolder'] = '4_run_RL_base/'
+            env.settings['Training']['RemovePlanets'] = False
         else:
             env.settings['Integration']['subfolder'] = '5_run_RL_hyperparam/'
             env.settings['Training']['neurons'] = 100 # TODO: fill in manually
             env.settings['Training']['layers'] = 3 # TODO: fill in manually
             env.settings['Training']['lr'] = 1e-3 # TODO: fill in manually
 
-        model_path_index = '79'
+        model_path_index = '37'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        index_to_plot = [0, 1,3,5,  8, 10]
+        index_to_plot = [0, 1,5,7, 9, 11]
 
-        env.settings['Training']['RemovePlanets'] = True
         env.settings['Integration']['max_error_accepted'] = 1e5
+        env.settings['Integration']['max_steps'] = 100
+        env.settings['InitialConditions']['seed'] = 1
         
         NAMES = []
         NAMES.append('_actionRL')
