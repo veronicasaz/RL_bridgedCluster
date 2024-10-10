@@ -55,14 +55,14 @@ def load_reward(a, suffix = ''):
                 Energy_r.append(float(j))
             EnergyE.append(Energy_r)
 
-    EnergyE_bridge = []
-    with open(a.settings['Training']['savemodel'] + suffix + "EnergyError_bridge.txt", "r") as f:
+    EnergyE_rel = []
+    with open(a.settings['Training']['savemodel'] + suffix + "EnergyError_rel.txt", "r") as f:
         # for line in f:
         for y in f.read().split('\n'):
-            Energy_bridge_r = list()
+            Energy_rel_r = list()
             for j in y.split():
-                Energy_bridge_r.append(float(j))
-            EnergyE_bridge.append(Energy_bridge_r)
+                Energy_rel_r.append(float(j))
+            EnergyE_rel.append(Energy_rel_r)
 
 
     tcomp = []
@@ -85,10 +85,10 @@ def load_reward(a, suffix = ''):
 
     HuberLoss = []
 
-    return score, EnergyE, EnergyE_bridge, HuberLoss, tcomp, testReward
+    return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward
 
 if __name__ == '__main__':
-    experiment = 2 # number of the experiment to be run
+    experiment = 0 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     elif experiment == 1:
         # Plot training results
         env = Cluster_env()
-        reward, EnergyError, EnergyError_bridge, HuberLoss, tcomp, testReward = load_reward(env, suffix = 'currentTraining/')
+        reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward = load_reward(env, suffix = 'currentTraining/')
         # plot_reward(env, reward, EnergyError, HuberLoss)
         # plot_balance(env, reward, EnergyError, EnergyError_bridge, tcomp)
         plot_test_reward(env, testReward)

@@ -94,7 +94,7 @@ def train_net(env = None, suffix = '', pretrained = False):
     # lists to save training progress
     save_reward = list()
     save_EnergyE = list()
-    save_EnergyEbridge = list()
+    save_EnergyErel = list()
     save_huberloss = list()
     save_tcomp = list()
     save_test_reward = list()
@@ -115,7 +115,7 @@ def train_net(env = None, suffix = '', pretrained = False):
         save_EnergyE_list = list()
         save_tcomp_list = list()
         save_huberloss_list = list()
-        save_EnergyEbridge_list = list()
+        save_EnergyE_rel_list = list()
 
         # Do first step without updating the networks and with the best step
         action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, 0)
@@ -128,7 +128,7 @@ def train_net(env = None, suffix = '', pretrained = False):
             observation, reward_p, terminated, info = env.step(action.item())
             save_reward_list.append(reward_p)
             save_EnergyE_list.append(info['Energy_error'])
-            save_EnergyEbridge_list.append(info['Energy_error_bridge'])
+            save_EnergyE_rel_list.append(info['Energy_error_rel'])
             save_tcomp_list.append(info['tcomp'])
             
             reward = torch.tensor([reward_p], device=device)
@@ -170,7 +170,7 @@ def train_net(env = None, suffix = '', pretrained = False):
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)
-        save_EnergyEbridge.append(save_EnergyEbridge_list)
+        save_EnergyErel.append(save_EnergyE_rel_list)
         save_huberloss.append(save_huberloss_list)
         save_tcomp.append(save_tcomp_list)
         save_test_reward.append(test_reward_list)
@@ -205,8 +205,8 @@ def train_net(env = None, suffix = '', pretrained = False):
                     f.write(str(s) +" ")
                 f.write("\n")
 
-        with open(env.settings['Training']['savemodel']+suffix+"EnergyError_bridge.txt", "w") as f:
-            for ss in save_EnergyEbridge:
+        with open(env.settings['Training']['savemodel']+suffix+"EnergyError_rel.txt", "w") as f:
+            for ss in save_EnergyErel:
                 for s in ss:
                     f.write(str(s) +" ")
                 f.write("\n")
@@ -437,7 +437,7 @@ def test_network(env, model): #TODO: adappt with env
             
         Reward[testcase, 0] = rew/steps # cumulative reward normalized by the number of steps reached
         Reward[testcase, 1] = info['Energy_error'] # last energy error
-        Reward[testcase, 2] = info['Energy_error_bridge'] # last energy error
+        Reward[testcase, 2] = info['Energy_error_rel'] # last energy error
         Reward[testcase, 3] = tcomp/steps  # normalized by the number of steps reached
     
     print("Testing finished")

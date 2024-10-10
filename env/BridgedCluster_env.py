@@ -27,7 +27,7 @@ from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
 from amuse.lab import Particles, new_powerlaw_mass_distribution
-from amuse.ext.bridge import bridge
+from amuse.ext.bridge import bridge, kick_system
 from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
 from amuse.ic import make_planets_oligarch
 
@@ -67,60 +67,112 @@ def get_orbital_elements_of_planetary_system(star, planets):
     planets.eccentricity = 10
     planets.semimajor_axis = 1.e+10 | units.au
 
+
+
 class Modified_Bridge(bridge):
     def __init__(self):
         super(Modified_Bridge, self).__init__()
         self.units_energy = units.m**2 *units.kg*units.s**(-2)
         self.G = constants.G
 
-    def evolve_model(self, tend, timestep = None): # override bridge evolve func
-        """
-        evolve combined system to tend, timestep fixes timestep
-        """
-        if timestep is None:
-            if self.timestep is None:
-                timestep=tend-self.time
-            else:
-                timestep=self.timestep
+    def find_common_particles(self):
+        self.particle_pairs = dict()
+        self.channel_particlepairs = dict()
+        for x in self.systems:
+            for y in self.partners[x]:
+                key = np.intersect1d(x.particles.key, y.particles.key)
+                index1 = np.where(x.particles.key == key)[0][0]
+                index2 = np.where(y.particles.key == key)[0][0]
+                self.particle_pairs[x] = [index1, index2]
+                # print(x.particles[index1])
+                # self.channel_particlepairs[x] = x.particles[index1].new_channel_to(y.particles[index2])
         
-        timestep=sign(tend-self.time)*abs(timestep)
+    def update_particles(self, x):
+        "x is the system to update"
+        for y in  self.partners[x]:
+            # self.channel_particlepairs[x].copy()
+            index1 = self.particle_pairs[x][0]
+            index2 = self.particle_pairs[x][1]
+            # move planets accordingly
+            diff_r = x.particles[index1].position - self.previous_coords_r
+            diff_v = x.particles[index1].velocity - self.previous_coords_v
+            y.particles.position += diff_r
+            y.particles.velocity += diff_v
+
+            # replace central particle
+            y.particles[index2].mass = x.particles[index1].mass
+            y.particles[index2].position = x.particles[index1].position
+            y.particles[index2].velocity = x.particles[index1].velocity
+
+            
+        
+    def remove_common(self, x, y):
+        part = y.particles[self.particle_pairs[x][1]]
+        # y.particles -= part
+        y.particles[self.particle_pairs[x][1]].mass *= 0  # change so that it has no potential
+        y.particles[self.particle_pairs[x][1]].position *= 0 
+        y.particles[self.particle_pairs[x][1]].velocity *= 0 
+        self.previous_coords_r = y.particles[self.particle_pairs[x][1]].position
+        self.previous_coords_v = y.particles[self.particle_pairs[x][1]].velocity
                 
-        if self.method==None:
-          return self.evolve_joined_leapfrog(tend,timestep)
-        else:
-          return self.evolve_simple_steps(tend,timestep)   
-        
     def evolve_joined_leapfrog(self,tend,timestep):
+        self.find_common_particles()
+        
         first=True
         self._drift_time=self.time
         self._kick_time=self.time
 
-        self.loss_energy = np.zeros(len(self.systems)) 
 
         while sign(timestep)*(tend - self.time) > sign(timestep)*timestep/2:      #self.time < (tend-timestep/2):
-            if first:      
-                self.kick_systems(timestep/2)
-                first=False
-            else:
-                self.kick_systems(timestep)
-
-            E_0 = []
             for x in self.systems:
-                E_0.append(x.particles.kinetic_energy() + x.particles.potential_energy(G = self.G))
-                
-            # Drift
-            self.drift_systems(self.time+timestep)
+                # print('=======Kick===========')
+                if first:      
+                    self.kick_one_system(x, timestep/2)
+                else:
+                    self.kick_one_system(x, timestep)
 
-            E_1 = []
-            for i, x in enumerate(self.systems):
-                E_1.append(x.particles.kinetic_energy() + x.particles.potential_energy(G = self.G))
-                self.loss_energy[i] += (E_1[i]-E_0[i]).value_in(self.units_energy)
+                # print('=======Drift===========')
+                self.drift_one_system(x, self.time+timestep)
 
+                # print('=======Update===========')
+                self.update_particles(x)
+                # if not first:
+                #     self.kick_one_system(x, timestep/2) 
+            first=False
             self.time=self.time+timestep
-        if not first:
-             self.kick_systems(timestep/2)         
+
+        return 0
+
+    def kick_one_system(self,x, dt):
+        if hasattr(x,"particles") and len(x.particles)>0:
+            for y in self.partners[x]:
+                if x is not y:
+                    if(self.verbose):  print(x.__class__.__name__,"receives kick from",y.__class__.__name__, end=' ')
+                    self.remove_common(x, y)
+                    kick_system(x, y.get_gravity_at_point, dt)
+                    if(self.verbose):  print(".. done")
         return 0
     
+    def drift_one_system(self,x, tend):
+        threads=[]
+        if hasattr(x, "evolve_model"):
+            offset=self.time_offsets[x]
+            if(self.verbose):
+                print("evolving", x.__class__.__name__, end=' ')
+            threads.append(threading.Thread(target=x.evolve_model, args=(tend-offset,)) )
+            
+        if self.use_threading:
+            for x in threads:
+                x.start()            
+            for x in threads:
+                x.join()
+        else:
+            for x in threads:
+                x.run()
+        if(self.verbose): 
+            print(".. done")
+        return 0
+
 class Cluster_env(gym.Env):
     def __init__(self, render_mode = None):
         self.settings = load_json("./settings_integration_Cluster.json")
@@ -186,7 +238,7 @@ class Cluster_env(gym.Env):
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         #stars=new_plummer_model(N,convert_nbody=converter)
-        print(self.settings['InitialConditions']['seed'])
+        # print(self.settings['InitialConditions']['seed'])
         stars = new_fractal_cluster_model(self.settings['InitialConditions']['n_bodies'],
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
@@ -201,9 +253,8 @@ class Cluster_env(gym.Env):
         #################################
         # Star to get planets
         # sun = stars.random_sample(1)[0]
-        sun = stars[0]
+        sun = stars[-1]
         sun.name = "Sun"
-        stars -= sun
 
         #################################
         # Planetary system
@@ -232,14 +283,16 @@ class Cluster_env(gym.Env):
         # All together
         cluster = Particles()
         cluster.add_particles(stars)
-        cluster.add_particle(sun)
         self.n_stars = len(cluster)
         self.index_planetarystar = self.n_stars-1
+        
+        # stars -= sun
 
         if self.settings['Training']['RemovePlanets'] == False:
             cluster.add_particles(planets)
 
         return stars, planetary_system, cluster
+        
 
     ## BASIC FUNCTIONS
     def reset(self):
@@ -261,6 +314,7 @@ class Cluster_env(gym.Env):
         self.units()
 
         # Same time step for the integrators and the bridge
+        # self.all_particles, \
         self.particles_global, self.particles_local, \
         self.particles_joined = self._initial_conditions_bridge()
         
@@ -270,16 +324,19 @@ class Cluster_env(gym.Env):
         self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
         self.grav_global.particles.add_particles(self.particles_global)
         self.grav_local.particles.add_particles(self.particles_local)
-            
+
         # Bridge creation
-        # self.grav_bridge = bridge.Bridge(verbose = False, use_threading=False)
-        # self.grav_bridge = Modified_Bridge()
-        self.grav_bridge = bridge()
-        self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
-        self.grav_bridge.add_system(self.grav_local, (self.grav_global,))
+        # self.grav_bridge = bridge()
+        self.grav_bridge = Modified_Bridge()
+
+        self.grav_bridge.add_system(self.grav_local, (self.grav_global,)) # particles without the sun
+        self.grav_bridge.add_system(self.grav_global)
+        # self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
 
         self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined), \
-                        self.grav_local.particles.new_channel_to(self.particles_joined)]
+                        self.grav_local.particles.new_channel_to(self.particles_joined)
+                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
+                        ]
 
         # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
         self.n_bodies_total = len(self.particles_joined)
@@ -325,18 +382,17 @@ class Cluster_env(gym.Env):
         """
         self.iteration += 1
         self.t_cumul += self.check_step # add the previous simulation time
-        # self.t_cumul += self.actions[action] # add the previous simulation time
         t = (self.t_cumul) | self.units_time
 
         # Apply action
         # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
         t0_step = time.time()
-        self.grav_bridge.evolve_model(t, timestep = self.actions[action] | self.units_time)
-        T = time.time() - t0_step
 
+        self.grav_bridge.evolve_model(t | self.units_time, timestep = self.actions[action] | self.units_time)
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
+        T = time.time() - t0_step
             
         # Get information for the reward
         # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
@@ -351,6 +407,7 @@ class Cluster_env(gym.Env):
             self._savestate(action, self.iteration, self.particles_joined, \
                             [info_error[0], info_error[1]],\
                             T, reward) # save initial state
+            
         
         # finish experiment if max number of iterations is reached
         if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
@@ -679,3 +736,128 @@ class Cluster_env(gym.Env):
             m = particles[i].mass.value_in(self.units_m)
             L += np.cross(r, m*v)
         return L
+
+
+
+    def reset_withoutBridge(self):
+        """
+        reset: reset the simulation 
+        INPUTS:
+            seed: choose the random seed
+            steps: simulation steps to be taken
+            typereward: type or reward to be applied to the problem
+            save_state: save state (True or False)
+        OUTPUTS:
+            state_RL: state vector to be passed to the RL
+            info_prev: information vector of the previous time step (zero vector)
+        """
+        self.iteration = 0
+        self.t_cumul = 0.0 # cumulative time for integration
+
+        # Select units
+        self.units()
+
+        # Same time step for the integrators and the bridge
+        # self.all_particles, \
+        self.particles_global, self.particles_local, \
+        self.particles_joined = self._initial_conditions_bridge()
+        
+        # TODO: tstep not implemented for now
+        self.grav = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
+        self.grav.particles.add_particles(self.particles_joined)
+
+        self.channel = self.grav.particles.new_channel_to(self.particles_joined)
+
+        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
+        self.n_bodies_total = len(self.particles_joined)
+
+        # Get initial energy and angular momentum. Initialize at 0 for relative error
+        self.E_0_total = \
+            self._get_info(self.particles_joined, initial = True)
+        self.E_total_prev = self.E_0_total
+        
+        # Create state vector
+        state_RL = self._get_state(self.particles_joined[0:self.n_stars], 1) # |r_i|, |v_i|
+
+        # Initialize time
+        self.check_step = self.settings['Integration']['check_step']
+
+        # Plot trajectory
+        if self.settings['Integration']['plot'] == True:
+            plot_state(self.particles_joined)
+
+        # Initialize variables to save simulation information
+        if self.settings['Integration']['savestate'] == True:
+            steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
+            self.state = np.zeros((steps, self.n_bodies_total, 9)) # action, mass, rx3, vx3, name
+            self.cons = np.zeros((steps, 4)) # action, reward, E,  t
+            self.comp_time = np.zeros(steps) # computation time
+            self._savestate(0, 0, self.particles_joined, [1.0, 1.0],\
+                             0.0, 0.0) # save initial state
+
+        self.info_prev = [0.0, 0.0]
+        return state_RL, self.info_prev
+    
+    def step_withoutBridge(self, action):
+        """
+        step: take a step with a given action, evaluate the results
+        INPUTS:
+            action: integer corresponding to the action taken
+        OUTPUTS:
+            state: state of the system to be given to the RL algorithm
+            reward: reward value obtained after a step
+            terminated: True or False, whether to stop the simulation
+            info: additional info to pass to the RL algorithm
+        """
+        self.iteration += 1
+        t0 = self.t_cumul 
+        self.t_cumul += self.check_step # add the previous simulation time
+        # self.t_cumul += self.actions[action] # add the previous simulation time
+        t = (self.t_cumul) | self.units_time
+
+        # Apply action
+        # self.grav_bridge.timestep = self.actions[action] | self.units_time
+        # Integrate
+        t0_step = time.time()
+        self.grav.evolve_model(t | self.units_time)
+        T = time.time() - t0_step
+            
+        # Get information for the reward
+        # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
+        info_error = self._get_info(self.particles_joined)
+        state = self._get_state(self.particles_joined[0:self.n_stars], info_error[1])
+        reward = self._calculate_reward(info_error[1], self.info_prev[1], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
+        self.info_prev = info_error
+        
+        if self.settings['Integration']['savestate'] == True:
+            self._savestate(action, self.iteration, self.particles_joined, \
+                            [info_error[0], info_error[1]],\
+                            T, reward) # save initial state
+            
+        
+        # finish experiment if max number of iterations is reached
+        if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
+              self.iteration == self.settings['Integration']['max_steps']:
+            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
+            terminated = True
+        else:
+            terminated = False
+            
+        # Display information at each step
+        if self.settings['Training']['display'] == True:
+            self._display_info(info_error, reward, action)
+
+        # Plot trajectory
+        if self.settings['Integration']['plot'] == True and terminated == True:
+            plot_state(self.particles_joined)
+
+        info = dict()
+        info['TimeLimit.truncated'] = False
+        info['Energy_error'] = info_error[1]
+        info['Energy_error_rel'] = info_error[0]
+        info['tcomp'] = T
+
+        return state, reward, terminated, info
+    
+    def close_withoutBridge(self):
+        self.grav.stop()

@@ -146,7 +146,7 @@ if __name__ == '__main__':
         env.settings['Integration']['subfolder'] = '1_run_convergence/seed1_2/'
         env.settings['InitialConditions']['seed'] = 1
         env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 100
+        env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
 
 
@@ -165,7 +165,7 @@ if __name__ == '__main__':
         env.settings['RL']['number_actions'] = max_actions
 
         NAMES = []
-        for act in reversed(range(env.settings['RL']['number_actions'])):
+        for act in (range(env.settings['RL']['number_actions'])):
             print("Action", env.actions[act])
             name = '_action_%0.2E'%(env.actions[act])
             NAMES.append(name)

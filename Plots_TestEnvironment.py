@@ -47,7 +47,7 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
     for PLOT in range(len(STATES)):
         fig = plt.figure(figsize = (10,15))
         gs1 = matplotlib.gridspec.GridSpec(6, 2, 
-                                        left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
+                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
                                         top = 0.88, bottom = 0.12)
         
         
@@ -55,7 +55,8 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
         # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
         name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
         legend = True
-        plot_traj_index = [PLOT, len(STATES)-1] # plot best and current
+
+        plot_traj_index = [0, PLOT] # plot best and current
         for case_i, case in enumerate(plot_traj_index): 
             ax1 = fig.add_subplot(gs1[0, case_i])
             ax12 = fig.add_subplot(gs1[1, case_i])
@@ -81,7 +82,7 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
         ax5 = fig.add_subplot(gs1[5, :])
 
         plot_distance_to_one(ax2, x_axis, STATES[PLOT][1:] ) # plot for the most accurate case
-        plot_distance_to_one(ax3, x_axis, STATES[plot_traj_index[-1]][1:], legend = False) # plot for the most accurate case
+        plot_distance_to_one(ax3, x_axis, STATES[0][1:], legend = False) # plot for the most accurate case
         # plot_actions_taken(ax3, x_axis, action[1:, 0]) # only for RL
 
         for case in range(len(STATES)):
@@ -99,8 +100,8 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
 
         ax5.set_xlabel('Step', fontsize = label_size)
 
-        ax2.set_ylabel(r'Distance to one current', fontsize = label_size)
-        ax3.set_ylabel(r'Distance to one accurate', fontsize = label_size)
+        ax2.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[case], fontsize = label_size-4)
+        ax3.set_ylabel(r'Distance to $S_5$'+'\n'+Titles[0], fontsize = label_size-4)
         ax4.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
         ax5.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
         
@@ -111,6 +112,39 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
         plt.savefig(save_path+'_%i.png'%PLOT, dpi = 150)
         plt.show()
 
+def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titles_list, save_path, plot_traj_index = 'bestworst'):
+    # Setup plot
+    label_size = 18
+    linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
+
+
+    fig = plt.figure(figsize = (10,10))
+    gs1 = matplotlib.gridspec.GridSpec(1, 1, 
+                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
+                                        top = 0.95, bottom = 0.12)
+    ax = fig.add_subplot(gs1[:, :])
+    seeds = len(STATES_list)
+    for j in range(seeds):
+        Energy_error, T_comp, R, action = calculate_errors(STATES_list[j], CONS_list[j], TCOMP_list[j])
+        x = T_comp[-1, :]
+        y = Energy_error[1][-1, :]
+        ax.plot(x, y, label = 'Seed %i'%(j+1), marker = 'o', color = colors[j])
+        
+        if j == 1:
+            for i in range(len(Titles_list[j])): # annotate time-step of each point
+                ax.annotate(Titles_list[j][i], (x[i]+10-x[i]/10, y[i]*1.15), color = colors[j], fontsize = 12)
+
+        
+    ax.set_yscale('log')
+    ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    ax.set_xlabel(r'$T_{Comp}$ (s)', fontsize = label_size)
+
+    ax.tick_params(axis='both', which='major', labelsize=label_size-3)
+        
+    ax.legend(loc='upper right',  fontsize = label_size-2)
+        
+    plt.savefig(save_path+'.png', dpi = 150)
+    plt.show()
 
 def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
