@@ -22,7 +22,7 @@
         "t_step_local": 1e-2,
         "integrator_global": "Ph4",
         "integrator_local": "Huayno",
-        "max_error_accepted": 1e-1,
+        "max_error_accepted": 1e0,
         "plot": false,
         "bridge": "modified"
     },
@@ -34,31 +34,31 @@
         "number_actions": 10,
 	"range_action": [5e-5, 1e-2],
 	"reward_f": 1,
-        "weights": [400.0, 1.0, 1.0]
+        "weights": [50.0, 1.0, 1.0]
      },
 
     "Training":
     {
-    	"RemovePlanets": true,
+    	"RemovePlanets": false,
     	"savemodel": "./Training_Results/",
     	"subfolder": "",
     	"suffix":"",
     	"display": true,
-        "max_episodes": 200,
+        "max_episodes": 500,
         "testdata_size": 3,
-        "hidden_layers": 5,
-        "neurons": 200,
-        "lr": 1e-2,
+        "hidden_layers": 7,
+        "neurons": 50,
+        "lr": 1e-3,
         "batch_size": 25,
         "gamma": 0.99,
         "eps_start": 0.9,
         "eps_end": 0.05,
-        "eps_decay": 1000,
+        "eps_decay": 100,
         "tau": 0.005
     },
     "Hyperparam_optim":
     {
-    "max_iter": 10,
+    "max_iter": 500,
     "individuals": 8,
     "bnds":{
     	    "epochs": [10, 1000],

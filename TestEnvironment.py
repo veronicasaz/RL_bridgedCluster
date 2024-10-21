@@ -105,7 +105,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 6 # number of the experiment to be run
+    experiment = 2 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -153,16 +153,17 @@ if __name__ == '__main__':
 
     elif experiment == 2: # run convergence study
         env = Cluster_env()
-        env.settings['Integration']['subfolder'] = '1_run_convergence/seed1_3/'
+        env.settings['Integration']['subfolder'] = '1_run_convergence/seed1/'
         env.settings['InitialConditions']['seed'] = 1
         env.settings['Training']['RemovePlanets'] = False
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
+        env.settings['Integration']["bridge"] = 'modified'
 
 
         max_actions = 9
         env.settings['RL']['number_actions'] = 6 #limit how many actions we choose
-        env.settings['RL']["range_action"] = [1e-5, 1e-2]
+        env.settings['RL']["range_action"] = [1e-7, 1e-2]
         env._initialize_RL()
 
         # actions = np.zeros(max_actions)
@@ -264,8 +265,8 @@ if __name__ == '__main__':
         env.settings['Integration']['subfolder'] = '2_run_initializations/'
 
         NAMES = []
-        seeds = [1, 2, 3, 4]
-        action = 5 # action = 1e-4
+        seeds = np.arange(50)
+        action = 1 # action = 1e-4
 
         for i in range(len(seeds)):
             name = '_seed'+ str(seeds[i])+'_action'+str(action)
@@ -275,7 +276,7 @@ if __name__ == '__main__':
             env.settings['InitialConditions']['seed'] = seeds[i]
             env.settings['Training']["RemovePlanets"]= False
             env.settings['Integration']["max_error_accepted"] = 1e10
-            # run_trajectory(env, action = action) 
+            run_trajectory(env, action = action) 
 
         STATE = []
         CONS = []
@@ -327,32 +328,34 @@ if __name__ == '__main__':
     elif experiment == 6: # create baseline without bridge
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
-        env.settings['InitialConditions']['seed'] = 2
+        env.settings['InitialConditions']['seed'] = 1
         env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 40
+        env.settings['Integration']['max_steps'] = 20
         env.settings['Integration']["max_error_accepted"] = 1e10
+        env.settings['InitialConditions']['n_bodies'] = 5
 
         NAMES = []
 
+        action = 0
         # Without bridge
         name = '_nobridge'
-        NAMES.append(name)
+        NAMES.append(name) 
         env.settings['Integration']['suffix'] = NAMES[0]
-        # run_trajectory(env, action = 0, bridge = False) # Action does not affect
+        run_trajectory(env, action = action, bridge = False) # Action does not affect
 
         # # With bridge
         name = '_orbridge'
         NAMES.append(name)
         env.settings['Integration']['suffix'] = NAMES[1]
         env.settings['Integration']["bridge"] = 'original'
-        # run_trajectory(env, action = 0, bridge = True) # Action does not affect
+        run_trajectory(env, action = action, bridge = True) # Action does not affect
 
         # With modified bridge
         name = '_modbridge'
         NAMES.append(name)
         env.settings['Integration']['suffix'] = NAMES[2]
         env.settings['Integration']["bridge"] = 'modified'
-        run_trajectory(env, action = 0, bridge = True) # Action does not affect
+        run_trajectory(env, action = action, bridge = True) # Action does not affect
 
         STATE = []
         CONS = []
