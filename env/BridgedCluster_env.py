@@ -147,7 +147,7 @@ class Modified_Bridge(bridge):
                     # print(x.particles)
                     # print('=======Update===========')
                     self.update_particles(x)
-                    self.save_partner = self.partners[x][0].particles.copy()
+                    # self.save_partner = self.partners[x][0].particles.copy()
                 else:
                     self.drift_one_system(x, self.time+timestep)
             first = False
@@ -173,14 +173,16 @@ class Modified_Bridge(bridge):
     def get_updated_particles(self, x):
         for y in  self.partners[x]:
             # self.channel_particlepairs[x].copy()
+
+            self.part_partner = y.particles.copy()
             index1 = self.particle_pairs[x][0]
             index2 = self.particle_pairs[x][1]
 
-            diff_position = y.particles[index2].position - self.save_partner[index2].position 
-            diff_velocity = y.particles[index2].velocity - self.save_partner[index2].velocity
+            # diff_position = y.particles[index2].position - self.save_partner[index2].position 
+            # diff_velocity = y.particles[index2].velocity - self.save_partner[index2].velocity
 
-            # diff_position = y.particles[index2].position - x.particles[index1].position 
-            # diff_velocity = y.particles[index2].velocity - x.particles[index1].velocity
+            diff_position = y.particles[index2].position - x.particles[index1].position 
+            diff_velocity = y.particles[index2].velocity - x.particles[index1].velocity
 
             # replace central particle
             x.particles[index1].mass = y.particles[index2].mass
@@ -196,6 +198,10 @@ class Modified_Bridge(bridge):
             index2 = self.particle_pairs[x][1]
             # y.particles.add_particle(self.part)
 
+            # y.particles[index2].mass = self.part_partner[index2].mass
+            # y.particles[index2].position = self.part_partner[index2].position
+            # y.particles[index2].velocity = self.part_partner[index2].velocity
+            
             # replace central particle with the one from the planetary system
             y.particles[index2].mass = x.particles[index1].mass
             y.particles[index2].position = x.particles[index1].position
@@ -303,6 +309,8 @@ class Cluster_env(gym.Env):
             
         elif self.settings["RL"]["state"] == 'potential':
             self.observation_space_n = 2
+        elif self.settings["RL"]["state"] == 'dist':
+            self.observation_space_n = 3
 
         self.observation_space = gym.spaces.Box(low=np.array([-np.inf]*self.observation_space_n), \
                                                 high=np.array([np.inf]*self.observation_space_n), \
@@ -381,7 +389,7 @@ class Cluster_env(gym.Env):
                                             inner_radius_disk,
                                             outer_radius_disk,
                                             mass_disk)
-
+        
         planets = ps.planets[0]
         planets.name = "planet"
         planets.type = "planet"
@@ -450,9 +458,8 @@ class Cluster_env(gym.Env):
         self.grav_bridge.add_system(self.grav_global)
         # self.grav_bridge.add_system(self.grav_global, (self.grav_local,)) # TODO: modified bridge does not work for this
 
-        self.channel = [
-                        self.grav_global.particles.new_channel_to(self.particles_joined),\
-                        self.grav_local.particles.new_channel_to(self.particles_joined)
+        self.channel = [self.grav_local.particles.new_channel_to(self.particles_joined),\
+                        self.grav_global.particles.new_channel_to(self.particles_joined)
                         # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
                         ]
 
@@ -695,17 +702,6 @@ class Cluster_env(gym.Env):
                 state[-1] = -np.log10(abs(E))
         
         elif self.settings['RL']['state'] == 'dist':
-            # state = np.zeros((self.n_bodies)*2) # dist r, dist v
-
-            # counter = 0
-            # for i in range(self.n_bodies):
-            #     for j in range(i+1, self.n_bodies):
-            #         state[counter]  = np.linalg.norm(particles_p_nbody[i,:]-particles_p_nbody[j,:], axis = 0) /10
-            #         state[self.n_bodies+counter ] = np.linalg.norm(particles_v_nbody[i,:]-particles_v_nbody[j,:], axis = 0)
-            #         counter += 1
-
-            # state[-1] = -np.log10(abs(E))
-
             state = np.zeros(3) # potential, mass, energy error
 
             distance = []

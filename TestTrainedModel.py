@@ -88,12 +88,12 @@ def load_reward(a, suffix = ''):
     return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward
 
 if __name__ == '__main__':
-    experiment = 0 # number of the experiment to be run
+    experiment = 2 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
         env = Cluster_env()
-        env.settings['Training']['RemovePlanets'] = True # train without planets (they do not contribute to the total energy error)
+        env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
         env.settings['Integration']['subfolder'] = 'currentTraining/'
         train_net(env = env, suffix = "currentTraining/")
 
@@ -118,23 +118,26 @@ if __name__ == '__main__':
             env.settings['Training']['layers'] = 3 # TODO: fill in manually
             env.settings['Training']['lr'] = 1e-3 # TODO: fill in manually
 
-        model_path_index = '37'
-        model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        index_to_plot = [0, 1,5,7, 9, 11]
-
         env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 100
+        env.settings['Integration']['max_steps'] = 40
         env.settings['InitialConditions']['seed'] = 1
+        env.settings['InitialConditions']['n_bodies'] = 10
+
+        model_path_index = '500'
+        model_path = './Training_Results/model_weights'+model_path_index +'.pth'
+        index_to_plot = [0, 1,3,5, 8, 10]
+
         
         NAMES = []
         NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
-        # run_trajectory(env, action = 'RL', model_path= model_path)
+        run_trajectory(env, action = 'RL', model_path= model_path)
         for act in range(env.settings['RL']['number_actions']):
+        # for act in range(1):
         # for act in index_to_plot:
             NAMES.append('_action'+ str(env.actions[act]))
             env.settings['Integration']['suffix'] = NAMES[act+1]
-            # run_trajectory(env, action = act)
+            run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
@@ -155,7 +158,7 @@ if __name__ == '__main__':
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL2.png'
         # plot_distance_action(env, STATE, CONS, TCOMP, NAMES, save_path)
-        plot_state_diff(env, STATE, CONS, TCOMP, TITLES, save_path)
+        # plot_state_diff(env, STATE, CONS, TCOMP, TITLES, save_path)
         # save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             # 'Action_comparison_RL3.png'
         # plot_comparison_end(env, STATE, CONS, TCOMP, NAMES, save_path, plot_traj_index=[0,1])

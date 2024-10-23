@@ -148,6 +148,34 @@ def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titl
     plt.savefig(save_path+'.png', dpi = 150)
     plt.show()
 
+def plot_convergence_direct_integra(env, STATES, CONS, TCOMP, Titles, save_path):
+    # Setup plot
+    label_size = 18
+    linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
+
+
+    fig = plt.figure(figsize = (10,10))
+    gs1 = matplotlib.gridspec.GridSpec(1, 1, 
+                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
+                                        top = 0.95, bottom = 0.12)
+    ax = fig.add_subplot(gs1[:, :])
+    seeds = len(STATES)
+    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    x = T_comp[-1, :]
+    y = Energy_error[1][-1, :]
+    ax.plot(x, y, label = Titles, marker = 'o', color = colors)
+    
+    ax.set_yscale('log')
+    ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    ax.set_xlabel(r'$T_{Comp}$ (s)', fontsize = label_size)
+
+    ax.tick_params(axis='both', which='major', labelsize=label_size-3)
+        
+    ax.legend(loc='upper right',  fontsize = label_size-2)
+        
+    plt.savefig(save_path+'.png', dpi = 150)
+    plt.show()
+
 def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
     label_size = 18
@@ -232,8 +260,8 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
     
     
     # Plot trajectories 2D
-    # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
-    name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
+    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    # name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
 
     legend = True
     if plot_traj_index == 'bestworst':
