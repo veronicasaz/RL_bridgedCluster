@@ -116,28 +116,44 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
 
 def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titles_list, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
-    label_size = 18
+    label_size = 20
     linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
 
 
-    fig = plt.figure(figsize = (10,10))
+    fig = plt.figure(figsize = (10,6))
     gs1 = matplotlib.gridspec.GridSpec(1, 1, 
                                         left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
                                         top = 0.95, bottom = 0.12)
     ax = fig.add_subplot(gs1[:, :])
     seeds = len(STATES_list)
+    actions = 5
+    points_to_join_x = np.zeros((actions, seeds))
+    points_to_join_y = np.zeros((actions, seeds))
     for j in range(seeds):
         Energy_error, T_comp, R, action = calculate_errors(STATES_list[j], CONS_list[j], TCOMP_list[j])
         x = T_comp[-1, :]
         y = Energy_error[1][-1, :]
         ax.plot(x, y, label = 'Seed %i'%(j+1), marker = 'o', color = colors[j])
         
-        if j == 1:
+        points_to_join_x[:, j] = x
+        points_to_join_y[:, j] = y
+
+        if j == 0:
             for i in range(len(Titles_list[j])): # annotate time-step of each point
-                ax.annotate(Titles_list[j][i], (x[i]+10-x[i]/10, y[i]*1.15), color = colors[j], fontsize = 12)
+                ax.annotate(Titles_list[j][i], (x[i], y[i]*1.2), ha = 'center',
+            color = colors[j], fontsize = 12)
+
+    
+        
+    for j in range(actions):
+        sorted_index = np.argsort(points_to_join_y[j, :])
+        a = np.take_along_axis(points_to_join_x[j, :], sorted_index, axis = 0)
+        b = np.take_along_axis(points_to_join_y[j, :], sorted_index, axis = -1)
+        ax.plot(a, b, linestyle = '--', color = 'black', alpha = 0.4)
 
         
     ax.set_yscale('log')
+    ax.set_xscale('log')
     ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
     ax.set_xlabel(r'$T_{Comp}$ (s)', fontsize = label_size)
 
@@ -148,28 +164,97 @@ def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titl
     plt.savefig(save_path+'.png', dpi = 150)
     plt.show()
 
-def plot_convergence_direct_integra(env, STATES, CONS, TCOMP, Titles, save_path):
+def plot_convergence_direct_integra_row(env, Bodies, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
     linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
-
+    markers = ['o', 'x', 's', 'o', 'x']
+    markersize = 13
 
     fig = plt.figure(figsize = (10,10))
     gs1 = matplotlib.gridspec.GridSpec(1, 1, 
-                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
+                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.9,
                                         top = 0.95, bottom = 0.12)
     ax = fig.add_subplot(gs1[:, :])
+    ax1 = ax.twinx()
     seeds = len(STATES)
     Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
-    x = T_comp[-1, :]
+    x = Bodies
     y = Energy_error[1][-1, :]
-    ax.plot(x, y, label = Titles, marker = 'o', color = colors)
+    y2 = T_comp[-1, :]
+
+    print(np.shape(y))
+
+    cases = len(STATES)//len(Bodies)
+    bodies_n = len(Bodies)
+    print(cases)
+    print(Titles)
+    for p_i in range(cases):
+        ax.plot(x, y[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+                linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2])
+        ax1.plot(x, y2[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+                 linestyle = linestyle[p_i], color = colors[1])
     
     ax.set_yscale('log')
-    ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
-    ax.set_xlabel(r'$T_{Comp}$ (s)', fontsize = label_size)
+    # ax1.set_yscale('log')
+
+    ax.set_xlabel("N", fontsize = label_size)
+    ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size, color = colors[0])
+    ax1.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size, color = colors[1])
 
     ax.tick_params(axis='both', which='major', labelsize=label_size-3)
+    ax.tick_params(axis='y', labelcolor = colors[0])
+    ax1.tick_params(axis='both', which='major', labelsize=label_size-3, labelcolor = colors[1])
+        
+    ax.legend(loc='upper right',  fontsize = label_size-2)
+        
+    plt.savefig(save_path+'.png', dpi = 150)
+    plt.show()
+
+def plot_convergence_direct_integra(env, Bodies, STATES, CONS, TCOMP, Titles, save_path):
+    # Setup plot
+    label_size = 18
+    linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
+    markers = ['o', 'x', 's', 'o', 'x']
+    markersize = 11
+
+    fig = plt.figure(figsize = (12,6))
+    gs1 = matplotlib.gridspec.GridSpec(1, 2, 
+                                        left=0.1, wspace=0.3, hspace = 0.3, right = 0.9,
+                                        top = 0.95, bottom = 0.12)
+    ax = fig.add_subplot(gs1[:, 0])
+    ax1 = fig.add_subplot(gs1[:, 1])
+    seeds = len(STATES)
+    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    x = Bodies
+    y = Energy_error[1][-1, :]
+    y2 = T_comp[-1, :]
+
+    print(np.shape(y))
+
+    cases = len(STATES)//len(Bodies)
+    bodies_n = len(Bodies)
+    print(cases)
+    print(Titles)
+    for p_i in range(cases):
+        ax.plot(x, y[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+                linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2],\
+                 markeredgecolor = 'black')
+        ax1.plot(x, y2[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+                 linestyle = linestyle[p_i], color = colors[1], markeredgecolor = 'black')
+    
+    ax.set_yscale('log')
+    # ax1.set_yscale('log')
+
+    ax.set_xlabel("N", fontsize = label_size)
+    ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size, color = colors[0])
+    ax1.set_xlabel("N", fontsize = label_size)
+    ax1.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size, color = colors[1])
+
+    ax.tick_params(axis='both', which='major', labelsize=label_size-3)
+    ax.tick_params(axis='y', labelcolor = colors[0])
+    ax1.tick_params(axis='both', which='major', labelsize=label_size-3)
+    ax1.tick_params(axis='y', labelcolor = colors[1])
         
     ax.legend(loc='upper right',  fontsize = label_size-2)
         
@@ -331,22 +416,26 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
 def plot_intializations(env, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
-    fig = plt.figure(figsize = (10,17))
+    fig = plt.figure(figsize = (17,10))
     rows = 4
     columns = 2
-    gs1 = matplotlib.gridspec.GridSpec(rows, columns,
-                                    left=0.14, wspace=0.3, hspace = 0.5, right = 0.96,
-                                    top = 0.86, bottom = 0.04)
+    # gs1 = matplotlib.gridspec.GridSpec(rows, columns, 
+    #                                 left=0.14, wspace=0.3, hspace = 0.4, right = 0.96,
+    #                                 top = 0.84, bottom = 0.04)  # for vertical
     
-
+    gs1 = matplotlib.gridspec.GridSpec(columns,rows, 
+                                    left=0.1, wspace=0.35, hspace = 0.35, right = 0.96,
+                                    top = 0.84, bottom = 0.06)
     # Plot trajectories 2D
     # name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
-    name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
+    name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", \
+                   r"$S_6$", r"$S_7$", r"$S_8$", r"$S_9$", \
+                   r"$P_1$", r"$P_2$",r"$P_3$", r"$P_4$", r"$P_5$", r"$P_6$", r"P_7"]
     legend = True
      # plot best and worst
     for case_i in range(rows): 
-        ax1 = fig.add_subplot(gs1[case_i, 0])
-        ax12 = fig.add_subplot(gs1[case_i, 1])
+        ax1 = fig.add_subplot(gs1[0, case_i])
+        ax12 = fig.add_subplot(gs1[1, case_i])
         plot_planets_trajectory(ax1, STATES[case_i], name_bodies, \
                             labelsize=label_size, steps = env.settings['Integration']['max_steps'], \
                             legend_on = False, axis = 'xy')
@@ -358,9 +447,11 @@ def plot_intializations(env, STATES, CONS, TCOMP, Titles, save_path):
         ax1.set_ylabel('y (au)', fontsize = label_size)
         ax12.set_xlabel('x (au)', fontsize = label_size)
         ax12.set_ylabel('y (au)', fontsize = label_size)
-        if case_i == 0: 
-            legend = False
-            ax1.legend(loc='upper center', bbox_to_anchor=(1, 1.7), \
+        # if case_i == 0: 
+            # ax1.legend(loc='upper center', bbox_to_anchor=(1, 1.7), \
+                    #    fancybox = True, ncol = 4, fontsize = label_size-2)
+        if case_i == 1:
+            ax1.legend(loc='upper center', bbox_to_anchor=(1., 1.5), \
                        fancybox = True, ncol = 4, fontsize = label_size-2)
             
         ax1.tick_params(axis='both', which='major', labelsize=label_size-3)

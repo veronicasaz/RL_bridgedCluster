@@ -106,7 +106,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 6 # number of the experiment to be run
+    experiment = 7 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -153,36 +153,29 @@ if __name__ == '__main__':
         plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
 
     elif experiment == 2: # run convergence study
-        env = Cluster_env()
-        env.settings['Integration']['subfolder'] = '1_run_convergence/seed4/'
-        env.settings['InitialConditions']['seed'] = 4
-        env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 40
-        env.settings['Integration']["max_error_accepted"] = 1e10
-        env.settings['Integration']["bridge"] = 'modified'
+
+        for seed in [1, 2, 3, 4]:
+            env = Cluster_env()
+            env.settings['Integration']['subfolder'] = '1_run_convergence/seed%i/'%seed
+            env.settings['InitialConditions']['seed'] = seed
+            env.settings['Training']['RemovePlanets'] = False
+            env.settings['Integration']['max_steps'] = 40
+            env.settings['Integration']["max_error_accepted"] = 1e10
+            env.settings['Integration']["bridge"] = 'modified'
 
 
-        max_actions = 9
-        env.settings['RL']['number_actions'] = 6 #limit how many actions we choose
-        env.settings['RL']["range_action"] = [1e-6, 1e-2]
-        env._initialize_RL()
+            max_actions = 9
+            env.settings['RL']['number_actions'] = 5 #limit how many actions we choose
+            env.settings['RL']["range_action"] = [1e-6, 1e-2]
+            env._initialize_RL()
 
-        # actions = np.zeros(max_actions)
-        # prev_action = env.actions[0]
-        # for act in reversed(range(5)):
-        #     actions[act] = prev_action/2
-        #     prev_action = actions[act]
-        # actions[5:] = env.actions
-        # env.actions = actions
-        # env.settings['RL']['number_actions'] = max_actions
-
-        NAMES = []
-        for act in range(env.settings['RL']['number_actions']):
-            print("Action", env.actions[act])
-            name = '_action_%0.2E'%(env.actions[act])
-            NAMES.append(name)
-            env.settings['Integration']['suffix'] = name
-            run_trajectory(env, action = act)
+            NAMES = []
+            for act in range(env.settings['RL']['number_actions']):
+                print("Action", env.actions[act])
+                name = '_action_%0.2E'%(env.actions[act])
+                NAMES.append(name)
+                env.settings['Integration']['suffix'] = name
+                run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
@@ -205,14 +198,14 @@ if __name__ == '__main__':
     elif experiment == 3: # put together convergence study for different seeds
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_convergence/'
-        env.settings['InitialConditions']['seed'] = 1
-        env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 40
-        env.settings['Integration']["max_error_accepted"] = 1e10
+        # env.settings['InitialConditions']['seed'] = 1
+        # env.settings['Training']['RemovePlanets'] = False
+        # env.settings['Integration']['max_steps'] = 40
+        # env.settings['Integration']["max_error_accepted"] = 1e10
 
 
         max_actions = 9
-        env.settings['RL']['number_actions'] = 6 #limit how many actions we choose
+        env.settings['RL']['number_actions'] = 5 #limit how many actions we choose
         env.settings['RL']["range_action"] = [1e-6, 1e-2]
         env._initialize_RL()
 
@@ -222,7 +215,7 @@ if __name__ == '__main__':
             NAMES.append(name)
 
 
-        seed_folder = ['seed1/', 'seed2/', 'seed3/']
+        seed_folder = ['seed1/', 'seed2/', 'seed3/', 'seed4/']
         # seed_folder = ['seed1_2/','seed2_2/']
         STATE_list = []
         CONS_list = []
@@ -248,22 +241,22 @@ if __name__ == '__main__':
             TITLES_list.append(TITLES)
 
         # Add direct integration one
-        STATE = []
-        CONS = []
-        TCOMP = []
-        TITLES = []
-        env.settings['Integration']['suffix'] = '_nobridge'
-        env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
-        state, cons, tcomp = load_state_files(env)
-        STATE.append(state)
-        CONS.append(cons)
-        TCOMP.append(tcomp)
-        TITLES.append('Direct integration')
+        # STATE = []
+        # CONS = []
+        # TCOMP = []
+        # TITLES = []
+        # env.settings['Integration']['suffix'] = '_nobridge'
+        # env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
+        # state, cons, tcomp = load_state_files(env)
+        # STATE.append(state)
+        # CONS.append(cons)
+        # TCOMP.append(tcomp)
+        # TITLES.append('Direct integration')
 
-        STATE_list.append(STATE)
-        CONS_list.append(CONS)
-        TCOMP_list.append(TCOMP)
-        TITLES_list.append(TITLES)
+        # STATE_list.append(STATE)
+        # CONS_list.append(CONS)
+        # TCOMP_list.append(TCOMP)
+        # TITLES_list.append(TITLES)
 
         save_path = env.settings['Integration']['savefile'] + '1_run_convergence/'+\
             'Convergence_comparison'
@@ -275,18 +268,18 @@ if __name__ == '__main__':
         env.settings['Integration']['subfolder'] = '2_run_initializations/'
 
         NAMES = []
-        seeds = np.arange(50)
-        action = 1 # action = 1e-4
+        seeds = np.arange(4)+1
+        action = 0 # action = 1e-4
 
         for i in range(len(seeds)):
             name = '_seed'+ str(seeds[i])+'_action'+str(action)
             NAMES.append(name)
             env.settings['Integration']['suffix'] = name
-            env.settings['Integration']['max_steps'] = 50
+            env.settings['Integration']['max_steps'] = 40
             env.settings['InitialConditions']['seed'] = seeds[i]
             env.settings['Training']["RemovePlanets"]= False
             env.settings['Integration']["max_error_accepted"] = 1e10
-            run_trajectory(env, action = action) 
+            # run_trajectory(env, action = action, bridge = True) 
 
         STATE = []
         CONS = []
@@ -384,21 +377,45 @@ if __name__ == '__main__':
     elif experiment == 7: # Test direct numerical method for different number bodies
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_directintegration/'
-        env.settings['InitialConditions']['seed'] = 3
+        env.settings['InitialConditions']['seed'] = 1
         env.settings['Training']['RemovePlanets'] = False
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
 
         NAMES = []
-        name = '_nobridge_'
+        TITLES = []
 
-        bodies_list = [5, 10, 50, 100]
+        bodies_list = [5, 10, 50, 100, 200, 500]
+
+        # ph4
+        name = 'nobridge_'
         for bodies in bodies_list:
             env.settings['InitialConditions']['n_bodies'] = bodies
             namei = name + str(bodies)
             NAMES.append(namei) 
+            TITLES.append('Direct %i'%bodies)
             env.settings['Integration']['suffix'] = namei
             run_trajectory(env, action = 0, bridge = False) # Action does not affect
+
+        name = 'modbridge_'
+        for bodies in bodies_list:
+            env.settings['InitialConditions']['n_bodies'] = bodies
+            namei = name + str(bodies)
+            NAMES.append(namei) 
+            TITLES.append('Bridge %i'%bodies)
+            env.settings['Integration']['suffix'] = namei
+            run_trajectory(env, action = 4, bridge = True) # Action does not affect
+
+        name = 'modbridgeRL_'
+        model_path_index = '44'
+        model_path = './Training_Results/model_weights'+model_path_index +'.pth'
+        for bodies in bodies_list:
+            env.settings['InitialConditions']['n_bodies'] = bodies
+            namei = name + str(bodies)
+            NAMES.append(namei) 
+            TITLES.append('RL Bridge %i'%bodies)
+            env.settings['Integration']['suffix'] = namei
+            run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
         STATE = []
         CONS = []
@@ -412,4 +429,4 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Bodies_comparison.png'
-        plot_convergence_direct_integra(env, STATE, CONS, TCOMP, NAMES, save_path)
+        plot_convergence_direct_integra(env, bodies_list, STATE, CONS, TCOMP, TITLES, save_path)

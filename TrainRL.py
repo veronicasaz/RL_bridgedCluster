@@ -31,7 +31,7 @@ from collections import namedtuple, deque
 from itertools import count
 
 
-def train_net(env = None, suffix = '', pretrained = False):
+def train_net(env = None, suffix = '', model_path_pretrained = False):
     """"
     pretrained: False or model path
     """
@@ -73,8 +73,8 @@ def train_net(env = None, suffix = '', pretrained = False):
     # Create nets
     policy_net = DQN(n_observations, n_actions, NEURONS, LAYERS).to(device)
     target_net = DQN(n_observations, n_actions, NEURONS, LAYERS).to(device)
-    if pretrained != False:
-        policy_net.load_state_dict(torch.load(pretrained))
+    if model_path_pretrained != False:
+        policy_net.load_state_dict(torch.load(model_path_pretrained))
     target_net.load_state_dict(policy_net.state_dict())
 
     Transition = namedtuple('Transition',
