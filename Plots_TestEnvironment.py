@@ -211,11 +211,11 @@ def plot_convergence_direct_integra_row(env, Bodies, STATES, CONS, TCOMP, Titles
     plt.savefig(save_path+'.png', dpi = 150)
     plt.show()
 
-def plot_convergence_direct_integra(env, Bodies, STATES, CONS, TCOMP, Titles, save_path):
+def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
     linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
-    markers = ['o', 'x', 's', 'o', 'x']
+    markers = ['o', 'x', 's', '^', 'x']
     markersize = 11
 
     fig = plt.figure(figsize = (12,6))
@@ -224,7 +224,6 @@ def plot_convergence_direct_integra(env, Bodies, STATES, CONS, TCOMP, Titles, sa
                                         top = 0.95, bottom = 0.12)
     ax = fig.add_subplot(gs1[:, 0])
     ax1 = fig.add_subplot(gs1[:, 1])
-    seeds = len(STATES)
     Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
     x = Bodies
     y = Energy_error[1][-1, :]
@@ -232,19 +231,38 @@ def plot_convergence_direct_integra(env, Bodies, STATES, CONS, TCOMP, Titles, sa
 
     print(np.shape(y))
 
-    cases = len(STATES)//len(Bodies)
+    cases = len(STATES)//len(seeds)//len(Bodies)
     bodies_n = len(Bodies)
-    print(cases)
-    print(Titles)
+    print(y2)
+
     for p_i in range(cases):
-        ax.plot(x, y[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+        y_seeds = np.zeros((len(seeds), len(Bodies)))
+        y2_seeds = np.zeros((len(seeds), len(Bodies)))
+        for s_i in range(len(seeds)):
+            y_seeds[s_i, :] = y[s_i*(cases*len(Bodies))+p_i*bodies_n: s_i*(cases*len(Bodies)) + bodies_n*(p_i+1)]
+            y2_seeds[s_i, :] = y2[s_i*(cases*len(Bodies))+p_i*bodies_n: s_i*(cases*len(Bodies)) + bodies_n*(p_i+1)]
+
+        y_avg = np.mean(y_seeds, axis = 1)
+        y_std = np.std(y_seeds, axis = 1)
+        y2_avg = np.mean(y2_seeds, axis = 1)
+        y2_std = np.std(y2_seeds, axis = 1)
+
+        # ax.errorbar(x, y_avg, y_std, marker = markers[p_i], markersize = markersize, \
+        #         linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2],\
+        #          markeredgecolor = 'black')
+        # ax1.errorbar(x, y2_avg, y2_std, marker = markers[p_i], markersize = markersize, \
+        #          linestyle = linestyle[p_i], color = colors[1], markeredgecolor = 'black')
+
+        ax.plot(x, y_avg, marker = markers[p_i], markersize = markersize, \
                 linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2],\
                  markeredgecolor = 'black')
-        ax1.plot(x, y2[p_i*bodies_n: bodies_n*(p_i+1)], marker = markers[p_i], markersize = markersize, \
+        ax1.plot(x, y2_avg, marker = markers[p_i], markersize = markersize, \
                  linestyle = linestyle[p_i], color = colors[1], markeredgecolor = 'black')
     
     ax.set_yscale('log')
-    # ax1.set_yscale('log')
+    ax1.set_yscale('log')
+    ax.set_xscale('log')
+    ax1.set_xscale('log')
 
     ax.set_xlabel("N", fontsize = label_size)
     ax.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size, color = colors[0])
@@ -340,9 +358,8 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
     linewidth = 2
     fig = plt.figure(figsize = (10,15))
     gs1 = matplotlib.gridspec.GridSpec(6, subplots, 
-                                    left=0.08, wspace=0.3, hspace = 0.3, right = 0.93,
-                                    top = 0.88, bottom = 0.12)
-    
+                                    left=0.15, wspace=0.5, hspace = 0.5, right = 0.93,
+                                    top = 0.88, bottom = 0.11)
     
     # Plot trajectories 2D
     name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
@@ -353,57 +370,74 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
         plot_traj_index = [0, len(STATES)-1] # plot best and worst
     if subplots == 3:
         plot_traj_index= np.arange(3)
+
     for case_i, case in enumerate(plot_traj_index): 
         ax1 = fig.add_subplot(gs1[0, case_i])
         ax12 = fig.add_subplot(gs1[1, case_i])
         plot_planets_trajectory(ax1, STATES[case], name_bodies, \
-                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], 
+                            legend_on = False, axislabel_on = False)
         plot_planetary_system_trajectory(ax12, STATES[case], name_bodies, \
-                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], legend_on = False)
-        ax1.set_title(Titles[case], fontsize = label_size + 2)
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], 
+                            legend_on = False, axislabel_on = False)
+        ax1.set_title(Titles[case], fontsize = label_size )
         ax1.set_xlabel('x (au)', fontsize = label_size)
         ax1.set_ylabel('y (au)', fontsize = label_size)
         ax12.set_xlabel('x (au)', fontsize = label_size)
         ax12.set_ylabel('y (au)', fontsize = label_size)
+
+        ax1.tick_params(axis='both', which='major', labelsize=label_size-4)
+        ax12.tick_params(axis='both', which='major', labelsize=label_size-4)
+        
         if case_i == 0: 
             legend = False
-            ax1.legend(loc='upper center', bbox_to_anchor=(1.0, 1.7), \
+            ax1.legend(loc='upper center', bbox_to_anchor=(1.2, 2.3), \
                        fancybox = True, ncol = 4, fontsize = label_size-2)
         
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
     Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
-    x_axis = np.arange(1, len(T_comp), 1)
+    x_axis = np.arange(1, len(T_comp), 1) *1e-2 # Multiplied by check step to have in myr
     ax2 = fig.add_subplot(gs1[2, :])
     ax3 = fig.add_subplot(gs1[3, :])
     ax4 = fig.add_subplot(gs1[4, :])
     ax6 = fig.add_subplot(gs1[5, :])
 
-    plot_distance_to_one(ax2, x_axis, STATES[0][1:] ) # plot for the most accurate case
+    plot_distance_to_one(ax2, x_axis, STATES[0][1:], legend = False) # plot for the most accurate case
+
+    # Actions
     plot_actions_taken(ax3, x_axis, action[1:, 0]) # only for RL
+    n_actions = env.settings['RL']['number_actions']
+    ax3.set_ylim([-1, n_actions+1])
+    labels = np.arange(n_actions)[::3]
+    ax3.set_yticks(np.arange(n_actions)[::3])
+    LABELS = []
+    for label in labels:
+        LABELS.append('%i: %.0E'%(label, env.actions[label]))
+    ax3.set_yticklabels(LABELS)
+
 
     for case in range(len(STATES)):
-        # fraction_error = np.divide(Energy_error[2][1:, case], Energy_error[3][1:, case]) *100
-        # plot_evolution(ax2, x_axis, fraction_error, label = Titles[case][1:], \
-        #                colorindex = case, linestyle = '-') # bridge error
-        # plot_evolution(ax2, x_axis, Energy_error[2][1:, case], \
-                    #    colorindex = case, linestyle = '--', alpha = 0.5)
-        # plot_evolution(ax2, x_axis, Energy_error[3][1:, case], \
-        #                colorindex = case, linestyle = ':', alpha = 0.5)
-        plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case][1:], \
-                       colorindex = case, linestyle = '-', linewidth = linewidth)
-        plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case][1:], \
-                       colorindex = case, linestyle = '-', linewidth = linewidth)
+        if case == 0:
+            linestyle = '--'
+        else:
+            linestyle = '-'
+        plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
+        plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
     
     for ax in [ax2, ax4,  ax6]:
         ax.set_yscale('log')
+    for ax_i in [ax2, ax3, ax4, ax6]:
+        ax_i.tick_params(axis='both', which='major', labelsize=label_size-2)
 
-    ax6.set_xlabel('Step', fontsize = label_size)
+    ax6.set_xlabel('Time (Myr)', fontsize = label_size)
 
     # ax2.set_ylabel(r'$\Delta E_{Bridge}$ ', fontsize = label_size)
-    ax2.set_ylabel(r'$\vert \vec r_x -\vec r_S\vert$ ', fontsize = label_size)
-    ax3.set_ylabel(r'Action', fontsize = label_size)
+    ax2.set_ylabel(r'$\vert \vec r_x -\vec r_S\vert$ (au) ', fontsize = label_size)
+    ax3.set_ylabel(r'Action taken', fontsize = label_size)
     ax4.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
     ax6.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
 
@@ -443,10 +477,6 @@ def plot_intializations(env, STATES, CONS, TCOMP, Titles, save_path):
                             labelsize=label_size, steps = env.settings['Integration']['max_steps'],\
                                   legend_on = False, axis = 'xy')
         ax1.set_title(Titles[case_i], fontsize = label_size + 2)
-        ax1.set_xlabel('x (au)', fontsize = label_size)
-        ax1.set_ylabel('y (au)', fontsize = label_size)
-        ax12.set_xlabel('x (au)', fontsize = label_size)
-        ax12.set_ylabel('y (au)', fontsize = label_size)
         # if case_i == 0: 
             # ax1.legend(loc='upper center', bbox_to_anchor=(1, 1.7), \
                     #    fancybox = True, ncol = 4, fontsize = label_size-2)

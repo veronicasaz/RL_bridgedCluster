@@ -377,8 +377,6 @@ if __name__ == '__main__':
     elif experiment == 7: # Test direct numerical method for different number bodies
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_directintegration/'
-        env.settings['InitialConditions']['seed'] = 1
-        env.settings['Training']['RemovePlanets'] = False
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
 
@@ -386,36 +384,50 @@ if __name__ == '__main__':
         TITLES = []
 
         bodies_list = [5, 10, 50, 100, 200, 500]
+        # bodies_list = [5, 10, 12]
+        seeds = [1, 2, 3, 4]
 
-        # ph4
-        name = 'nobridge_'
-        for bodies in bodies_list:
-            env.settings['InitialConditions']['n_bodies'] = bodies
-            namei = name + str(bodies)
-            NAMES.append(namei) 
-            TITLES.append('Direct %i'%bodies)
-            env.settings['Integration']['suffix'] = namei
-            run_trajectory(env, action = 0, bridge = False) # Action does not affect
+        for SED in seeds:
+            env.settings['InitialConditions']['seed'] = SED
 
-        name = 'modbridge_'
-        for bodies in bodies_list:
-            env.settings['InitialConditions']['n_bodies'] = bodies
-            namei = name + str(bodies)
-            NAMES.append(namei) 
-            TITLES.append('Bridge %i'%bodies)
-            env.settings['Integration']['suffix'] = namei
-            run_trajectory(env, action = 4, bridge = True) # Action does not affect
+            # ph4
+            name = '_nobridge_'
+            for bodies in bodies_list:
+                env.settings['InitialConditions']['n_bodies'] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('Direct %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                # run_trajectory(env, action = 0, bridge = False) # Action does not affect
 
-        name = 'modbridgeRL_'
-        model_path_index = '44'
-        model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        for bodies in bodies_list:
-            env.settings['InitialConditions']['n_bodies'] = bodies
-            namei = name + str(bodies)
-            NAMES.append(namei) 
-            TITLES.append('RL Bridge %i'%bodies)
-            env.settings['Integration']['suffix'] = namei
-            run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+            name = '_modbridge_accurate_'
+            for bodies in bodies_list:
+                env.settings['InitialConditions']['n_bodies'] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('Bridge fast %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                # run_trajectory(env, action = 2, bridge = True) # Action does not affect
+
+            name = '_modbridge_fast_'
+            for bodies in bodies_list:
+                env.settings['InitialConditions']['n_bodies'] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('Bridge accurate %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                # run_trajectory(env, action = 6, bridge = True) # Action does not affect
+
+            name = '_modbridgeRL_'
+            model_path_index = '44'
+            model_path = './Training_Results/model_weights'+model_path_index +'.pth'
+            for bodies in bodies_list:
+                env.settings['InitialConditions']['n_bodies'] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('RL Bridge %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
         STATE = []
         CONS = []
@@ -429,4 +441,4 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Bodies_comparison.png'
-        plot_convergence_direct_integra(env, bodies_list, STATE, CONS, TCOMP, TITLES, save_path)
+        plot_convergence_direct_integra(env, bodies_list, seeds,STATE, CONS, TCOMP, TITLES, save_path)

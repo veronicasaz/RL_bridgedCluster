@@ -88,17 +88,17 @@ def load_reward(a, suffix = ''):
     return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward
 
 if __name__ == '__main__':
-    experiment = 0 # number of the experiment to be run
+    experiment = 2 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
         env = Cluster_env()
         env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
         env.settings['Integration']['subfolder'] = 'currentTraining/'
-        # train_net(env = env, suffix = "currentTraining/")
+        train_net(env = env, suffix = "currentTraining/")
 
-        model_path = env.settings['Training']['savemodel'] + 'model_weights44.pth'
-        train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
+        # model_path = env.settings['Training']['savemodel'] + 'model_weights44.pth'
+        # train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
 
     elif experiment == 1:
         # Plot training results
@@ -115,40 +115,43 @@ if __name__ == '__main__':
         env.settings['Training']['RemovePlanets'] = False
 
         env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 40
-        seed = 3
-        env.settings['InitialConditions']['seed'] = seed
-        env.settings['InitialConditions']['n_bodies'] = 10
+        env.settings['Integration']['max_steps'] = 10
 
-        model_path_index = '43'
+        seed = 1
+        env.settings['InitialConditions']['seed'] = seed
+        env.settings['InitialConditions']['n_bodies'] = 9
+
+        model_path_index = '44'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
         index_to_plot = [0, 1,3,5, 8, 10]
-
         
         NAMES = []
+        TITLES = []
         NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
-        run_trajectory(env, action = 'RL', model_path= model_path)
+        TITLES.append(r'RL-variable $\mu$')
+        # run_trajectory(env, action = 'RL', model_path= model_path)
         for act in range(env.settings['RL']['number_actions']):
             NAMES.append('_action_%0.3E_seed%i'%(env.actions[act], seed))
             env.settings['Integration']['suffix'] = NAMES[act+1]
+            TITLES.append(r'%i: $\mu$ = %.1E'%(act, env.actions[act]))
             # run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
         TCOMP = []
-        TITLES = []
+        TITLES2 = []
         for act in index_to_plot:
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)
             CONS.append(cons)
             TCOMP.append(tcomp)
-            TITLES.append(NAMES[act])
+            TITLES2.append(TITLES[act])
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL.png'
-        plot_trajs(env, STATE, CONS, TCOMP, TITLES, save_path, plot_traj_index=[0,1])
+        plot_trajs(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=[0,1])
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL2.png'
         # plot_state_diff(env, STATE, CONS, TCOMP, TITLES, save_path)
@@ -170,7 +173,7 @@ if __name__ == '__main__':
         seeds = np.arange(initializations)
         NAMES = []
 
-        model_path_index = '500'
+        model_path_index = '44'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
 
         for i in range(initializations):
@@ -179,7 +182,7 @@ if __name__ == '__main__':
             NAMES.append('_actionRL_%i'%i)
             print(NAMES)
             env.settings['Integration']['suffix'] = NAMES[i]
-            # run_trajectory(env, action = 'RL', model_path=model_path)
+            run_trajectory(env, action = 'RL', model_path=model_path)
 
         for act in range(env.settings['RL']['number_actions']):
             for i in range(initializations):
@@ -189,7 +192,7 @@ if __name__ == '__main__':
                 name = '_action_%i_%i'%(act, i)
                 NAMES.append(name)
                 env.settings['Integration']['suffix'] = name
-                # run_trajectory(env, action = act)
+                run_trajectory(env, action = act)
 
         STATE = []
         CONS = []

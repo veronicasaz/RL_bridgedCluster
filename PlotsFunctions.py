@@ -13,10 +13,11 @@ import torch
 from TrainRL import DQN
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
-        'mediumslateblue', 'deepskyblue', 'navy', 'black']
+        'mediumslateblue', 'deepskyblue', 'navy', 'black', 'red']
 colors2 = ['navy']
 lines = ['-', '--', ':', '-.' ]
-markers = ['o', 'x', '.', '^', 's']
+# markers = ['o', 'x', '.', '^', 's']
+markers = ['o', 'o','o','o','o','o','o','o','o','x', 'x','x', '^', 's']
 
 
 def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
@@ -43,7 +44,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         m = state[0, j, 1]
         size_marker = np.log10(m)/10
 
-        ax.scatter(x[0], y[0], s = 20*size_marker,\
+        ax.scatter(x[0], y[0], marker = markers[j], s = 20*size_marker,\
                    c = colors[j%len(colors)], \
                     label = "Particle "+ name_planets[j])
         ax.plot(x[1:], y[1:], marker = None, 
@@ -52,7 +53,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
                     color = colors[j%len(colors)], \
                     alpha = 0.1)
         
-        ax.scatter(x[1:], y[1:], marker = marker, s = size_marker, \
+        ax.scatter(x[1:], y[1:], marker = markers[j], s = size_marker, \
                     c = colors[j%len(colors)])        
         
     if legend_on == True:
@@ -96,18 +97,20 @@ def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, st
             M[counter] = state[0, j, 1]
             counter += 1 # count planet index
 
-    size_marker = np.log10(M)/10
+    index_plot_colors = n_bodies-n_planets
+    size_marker = 10
     for j in range(n_planets):
-        ax.scatter(X[0, j], Y[0, j], s = 20*size_marker[j],\
-                c = colors[(j+4)%len(colors)], \
+        ax.scatter(X[0, j], Y[0, j], marker = markers[index_plot_colors+j],\
+                   s = 1*size_marker,\
+                    c = colors[(index_plot_colors+j)%len(colors)], \
                     label = "Particle "+ name_planets[j])
-        ax.plot(X[:, j], Y[:, j], marker = None, 
-                    markersize = size_marker[j], \
+        ax.plot(X[:, j], Y[:, j], marker = markers[index_plot_colors+j], 
+                    markersize = size_marker, \
                     linestyle = '-',\
-                    color = colors[(j+4)%len(colors)], \
+                    color = colors[(index_plot_colors+j)%len(colors)], \
                     alpha = 0.1)
-        ax.scatter(X[:, j], Y[:, j], marker = marker, s = size_marker[j], \
-                    c = colors[(j+4)%len(colors)])        
+        ax.scatter(X[:, j], Y[:, j], marker = markers[index_plot_colors+j], s = 3*size_marker, \
+                    c = colors[(index_plot_colors+j)%len(colors)])        
         
     if legend_on == True:
         ax.legend(fontsize = labelsize)
@@ -131,10 +134,10 @@ def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12,
     Dist = []
     Labels = []
     for i in range(n_planets):
-        r1 = state[0:steps, i, 2:5]
+        r1 = state[0:steps, i, 2:5]/1.496e11
         m = state[0, i, 1]
         for j in range(i+1, n_planets):
-            r2 = state[0:steps, j, 2:5]
+            r2 = state[0:steps, j, 2:5]/1.496e11
             Dist.append(np.linalg.norm(r2-r1, axis = 1))
             Labels.append('Particle %i-%i'%(i, j))
         
@@ -164,16 +167,17 @@ def plot_distance_to_one(ax, x_axis, state, labelsize = 12,
     Labels = []
     
     last_index = np.where(state[0, :, 8] == 1)[0][0]
-    r0 = state[0:steps, last_index, 2:5]
+    r0 = state[0:steps, last_index, 2:5]/1.496e11
     for i in range(0, last_index): # for ecah particle except for the last one
-        r1 = state[0:steps, i, 2:5]
+        r1 = state[0:steps, i, 2:5]/1.496e11
         m = state[0, i, 1]
         Dist.append(np.linalg.norm(r0-r1, axis = 1))
         Labels.append('Particle %i-%i'%(i+1, last_index+1))
         
         size_marker = np.log(m)/30
     for i in range(len(Dist)):
-        ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5)
+        ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5, 
+                color = colors[(i)%len(colors)])
     if legend == True:
         ax.legend(fontsize =labelsize, framealpha = 0.5)
     # ax.set_yscale('log')
