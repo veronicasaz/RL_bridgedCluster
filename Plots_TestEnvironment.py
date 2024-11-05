@@ -233,8 +233,8 @@ def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Tit
 
     cases = len(STATES)//len(seeds)//len(Bodies)
     bodies_n = len(Bodies)
-    print(y2)
 
+    print("CASES", cases, len(seeds), len(Bodies))
     for p_i in range(cases):
         y_seeds = np.zeros((len(seeds), len(Bodies)))
         y2_seeds = np.zeros((len(seeds), len(Bodies)))
@@ -242,10 +242,10 @@ def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Tit
             y_seeds[s_i, :] = y[s_i*(cases*len(Bodies))+p_i*bodies_n: s_i*(cases*len(Bodies)) + bodies_n*(p_i+1)]
             y2_seeds[s_i, :] = y2[s_i*(cases*len(Bodies))+p_i*bodies_n: s_i*(cases*len(Bodies)) + bodies_n*(p_i+1)]
 
-        y_avg = np.mean(y_seeds, axis = 1)
-        y_std = np.std(y_seeds, axis = 1)
-        y2_avg = np.mean(y2_seeds, axis = 1)
-        y2_std = np.std(y2_seeds, axis = 1)
+        y_avg = np.mean(y_seeds, axis = 0)
+        y_std = np.std(y_seeds, axis = 0)
+        y2_avg = np.mean(y2_seeds, axis = 0)
+        y2_std = np.std(y2_seeds, axis = 0)
 
         # ax.errorbar(x, y_avg, y_std, marker = markers[p_i], markersize = markersize, \
         #         linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2],\
@@ -254,9 +254,11 @@ def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Tit
         #          linestyle = linestyle[p_i], color = colors[1], markeredgecolor = 'black')
 
         ax.plot(x, y_avg, marker = markers[p_i], markersize = markersize, \
-                linestyle = linestyle[p_i], color = colors[0], label = Titles[p_i*len(Bodies)][0:-2],\
+                linestyle = linestyle[p_i], color = colors[0], \
+                    label = Titles[p_i*len(Bodies)][0:-2],\
                  markeredgecolor = 'black')
         ax1.plot(x, y2_avg, marker = markers[p_i], markersize = markersize, \
+                 label = Titles[p_i*len(Bodies)][0:-2],\
                  linestyle = linestyle[p_i], color = colors[1], markeredgecolor = 'black')
     
     ax.set_yscale('log')
@@ -274,7 +276,7 @@ def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Tit
     ax1.tick_params(axis='both', which='major', labelsize=label_size-3)
     ax1.tick_params(axis='y', labelcolor = colors[1])
         
-    ax.legend(loc='upper right',  fontsize = label_size-2)
+    ax1.legend(loc='upper left',  fontsize = label_size-2)
         
     plt.savefig(save_path+'.png', dpi = 150)
     plt.show()
@@ -824,16 +826,16 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
     ax2 = fig.add_subplot(gs1[0, 0])
     ax3 = fig.add_subplot(gs1[1, 1])
 
-    markers = ['o', 'x', 's', 'o', 'x']
+    markers = ['o', 'x', 's', 'o', 'x', '^']
     order = [1,2,0, 3, 4, 5, 6]
-    alpha = [0.5, 0.5, 0.9, 0.8, 0.9]
+    alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7]
 
 
     # Calculate the energy errors
     E_T = np.zeros((initializations, len(plot_traj_index)))
     E_B = np.zeros((initializations, len(plot_traj_index)))
     T_c = np.zeros((initializations, len(plot_traj_index)))
-    Labels = np.zeros((initializations, len(plot_traj_index)))
+    # Labels = np.zeros((initializations, len(plot_traj_index)))
     nsteps_perepisode = np.zeros((initializations, len(plot_traj_index)))
     
 
@@ -844,7 +846,7 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
             E_T[i, act] = abs(cons[plot_traj_index[act]*initializations + i][3, -1]) # absolute relative energy error
 
             T_c[i, act] = np.sum(tcomp[plot_traj_index[act]*initializations + i])/nsteps_perepisode # add individual computation times
-            Labels[i, act] = plot_traj_index[act]
+            # Labels[i, act] = plot_traj_index[act]
 
     def minimum(a, b):
         if a <= b:
@@ -866,7 +868,7 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
         X = T_c[:, i]
         Y = E_B[:, i]
         ax1.scatter(X, Y, color = colors[i], alpha = alphavalue, marker = markers[i],\
-                s = msize, label = Labels[0, i], zorder =order[i])
+                s = msize, label = Titles[plot_traj_index[i]], zorder =order[i])
         min_x = minimum(min_x, min(X))
         min_y = minimum(min_y, min(Y))
         max_x = maximum(max_x, max(X))
@@ -875,6 +877,8 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
     binsy = np.logspace(np.log10(min_y),np.log10(max_y), 50)  
 
     for i in range(len(plot_traj_index)):  
+        X = T_c[:, i]
+        Y = E_B[:, i]
         ax2.hist(X, bins = binsx, color = colors[i],  alpha = alpha[i], edgecolor=colors[i], \
                  linewidth=1.2, zorder =order[i])
         ax2.set_yscale('log')

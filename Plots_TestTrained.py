@@ -9,6 +9,7 @@ from scipy.signal import savgol_filter
 import random
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import math
 
 from scipy.signal import butter, lfilter, freqz
@@ -158,7 +159,7 @@ def plot_reward(a, reward, Eerror, HuberLoss):
     plt.show()
 
 
-def plot_test_reward(a, test_reward):
+def plot_test_reward(a, test_reward, trainingTime, episodes = None):
     """
     plot_test_reward: plot training parameters taken from the test dataset
     INPUTS:
@@ -166,8 +167,8 @@ def plot_test_reward(a, test_reward):
         test_reward: array with each row for each episode and columns: 
             [Reward, Energy error, Computation time]
     """
-    f, ax = plt.subplots(4, 1, figsize = (10,7))
-    plt.subplots_adjust(left=0.08, right=0.97, top=0.96, \
+    f, ax = plt.subplots(3, 1, figsize = (10,7))
+    plt.subplots_adjust(left=0.08, right=0.97, top=0.94, \
                         bottom=0.1, hspace = 0.6)
     fontsize = 18
 
@@ -180,7 +181,8 @@ def plot_test_reward(a, test_reward):
     
     # pts = 11
     # ax[0].plot(x_episodes, steps_perepisode, color = colors[0], alpha = 1)
-    episodes = len(test_reward) 
+    if episodes == None:
+        episodes = len(test_reward) 
     x_episodes = np.arange(episodes)
     
     REWARD_avg = []
@@ -202,14 +204,14 @@ def plot_test_reward(a, test_reward):
         EERROR_avg.append(np.mean(np.log10(abs(reshaped[:, 1]))))
         EERROR_std.append(np.std(np.log10(abs(reshaped[:, 1]))))
 
-        EERRORBRIDGE_avg.append(np.mean(np.log10(abs(reshaped[:, 1]))))
-        EERRORBRIDGE_std.append(np.std(np.log10(abs(reshaped[:, 1]))))
+        # EERRORBRIDGE_avg.append(np.mean(np.log10(abs(reshaped[:, 1]))))
+        # EERRORBRIDGE_std.append(np.std(np.log10(abs(reshaped[:, 1]))))
 
-        TCOMP_avg.append(np.mean(reshaped[:, 2]))
-        TCOMP_std.append(np.std(reshaped[:, 2]))
+        TCOMP_avg.append(np.mean(reshaped[:, 3]))
+        TCOMP_std.append(np.std(reshaped[:, 3]))
 
-    y = [REWARD_avg, EERROR_avg, EERRORBRIDGE_avg,TCOMP_avg]
-    e = [REWARD_std, EERROR_std, EERRORBRIDGE_std,TCOMP_std]
+    y = [REWARD_avg, EERROR_avg, TCOMP_avg]
+    e = [REWARD_std, EERROR_std, TCOMP_std]
     for plot in range(len(y)):
         # ax[plot].errorbar(x_episodes, y[plot], e[plot], color = colors[0], \
         #                   alpha = 1, fmt='o')
@@ -235,25 +237,32 @@ def plot_test_reward(a, test_reward):
                    [min(np.array(REWARD_avg)-np.array(REWARD_std)),\
                     value[i]], linestyle = '-', marker = 'x', linewidth = 2, color = 'red')
     
-    for ax_i in ax: 
+    ax[0].tick_params(axis='both', which='major', labelsize=fontsize-5)
+    for ax_i in ax[1:]: 
         ax_i.tick_params(axis='both', which='major', labelsize=fontsize-3)
-        ax_i.tick_params(axis='y', labelsize=fontsize-3)
+        # ax_i.tick_params(axis='y', labelsize=fontsize-3)
+
+    f.suptitle('Training time: %.2f min'%(trainingTime[-1]/60), y = 0.99, x = 0.23, fontsize = fontsize -3)
 
     ax[-1].set_xlabel('Episode', fontsize = fontsize)
     ax[0].set_title('R', fontsize = fontsize)
     ax[1].set_title(r'$log_{10}(\vert \Delta E\vert)$', fontsize = fontsize)
-    ax[2].set_title(r'$log_{10}(\vert \Delta E_{bridge}\vert)$', fontsize = fontsize)
+    ax[2].set_title(r'$T_{comp}$ (s)', fontsize = fontsize)
+    # ax[2].set_title(r'$log_{10}(\vert \Delta E_{bridge}\vert)$', fontsize = fontsize)
     # ax[2].set_title(r'$log_{10}(\vert \Delta E\vert) - log_{10}(\vert \Delta E_{prev}\vert)$', fontsize = fontsize)
-    ax[0].set_yscale('symlog', linthresh = 1e-1)
-    ax[3].set_title(r'$T_{comp}$ (s)', fontsize = fontsize)
-    ax[3].set_yscale('symlog', linthresh = 1e-1)
-    ax[3].set_yscale('log')
+    
+    ax[0].set_yscale('symlog', linthresh = 1e0)
+    b = ticker.SymmetricalLogLocator(base = 10, linthresh = 1e1)
+    b.set_params(numticks = 4)
+    ax[0].yaxis.set_major_locator(b)
+    
+    # ax[3].set_yscale('symlog', linthresh = 1e-1)
+    ax[2].set_yscale('log')
 
-    # For hermite 1
-    # ax[0].set_ylim([-10, 2])
-    # ax[1].set_ylim([-12, -2])
-    # ax[2].set_ylim([-15, -0.5])
-    # ax[2].set_ylim([0.0001, 0.003])
+    # For 1
+    ax[0].set_ylim([-10e6, 10e4])
+    ax[1].set_ylim([-4, 4])
+    ax[2].set_ylim([1e-1, 3e0])
 
     # For hermite 2
     # ax[0].set_ylim([-10, 4])

@@ -83,9 +83,14 @@ def load_reward(a, suffix = ''):
                 testreward_r.append(float(j))
             testReward.append(testreward_r)
 
+    trainingTime = []
+    with open(a.settings['Training']['savemodel'] + suffix + "TrainingTime.txt", "r") as f:
+        for j in f.read().split():
+            trainingTime.append(float(j))
+
     HuberLoss = []
 
-    return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward
+    return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward, trainingTime
 
 if __name__ == '__main__':
     experiment = 2 # number of the experiment to be run
@@ -95,18 +100,19 @@ if __name__ == '__main__':
         env = Cluster_env()
         env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
         env.settings['Integration']['subfolder'] = 'currentTraining/'
-        train_net(env = env, suffix = "currentTraining/")
+        # train_net(env = env, suffix = "currentTraining/")
 
-        # model_path = env.settings['Training']['savemodel'] + 'model_weights44.pth'
-        # train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
+        model_path = env.settings['Training']['savemodel'] + 'model_weights50.pth'
+        train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
 
     elif experiment == 1:
         # Plot training results
         env = Cluster_env()
-        reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward = load_reward(env, suffix = 'currentTraining/')
-        # plot_reward(env, reward, EnergyError, HuberLoss)
-        # plot_balance(env, reward, EnergyError, EnergyError_bridge, tcomp)
-        plot_test_reward(env, testReward)
+        reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
+                load_reward(env, suffix = 'currentTraining/')
+        # reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
+        #         load_reward(env, suffix = '12_biggerNet!!/')
+        plot_test_reward(env, testReward, trainingTime)
         
     elif experiment == 2:
         # 2: use network trained with hyperparameters chosen by hand
@@ -115,27 +121,28 @@ if __name__ == '__main__':
         env.settings['Training']['RemovePlanets'] = False
 
         env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 10
+        env.settings['Integration']['max_steps'] = 40
 
-        seed = 1
+        seed = 3
         env.settings['InitialConditions']['seed'] = seed
-        env.settings['InitialConditions']['n_bodies'] = 9
+        env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
+        env.settings['InitialConditions']['n_bodies'] = 5
 
-        model_path_index = '44'
+        model_path_index = '91'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        index_to_plot = [0, 1,3,5, 8, 10]
+        index_to_plot = [0, 1,3,6, 8, 10]
         
         NAMES = []
         TITLES = []
         NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
         TITLES.append(r'RL-variable $\mu$')
-        # run_trajectory(env, action = 'RL', model_path= model_path)
+        run_trajectory(env, action = 'RL', model_path= model_path)
         for act in range(env.settings['RL']['number_actions']):
             NAMES.append('_action_%0.3E_seed%i'%(env.actions[act], seed))
             env.settings['Integration']['suffix'] = NAMES[act+1]
             TITLES.append(r'%i: $\mu$ = %.1E'%(act, env.actions[act]))
-            # run_trajectory(env, action = act)
+            run_trajectory(env, action = act)
 
         STATE = []
         CONS = []
@@ -173,9 +180,10 @@ if __name__ == '__main__':
         seeds = np.arange(initializations)
         NAMES = []
 
-        model_path_index = '44'
+        model_path_index = '468'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
 
+        TITLES = []
         for i in range(initializations):
             env = start_env()
             env.settings['InitialConditions']['seed'] = seeds[i]
@@ -183,6 +191,7 @@ if __name__ == '__main__':
             print(NAMES)
             env.settings['Integration']['suffix'] = NAMES[i]
             run_trajectory(env, action = 'RL', model_path=model_path)
+        TITLES.append(r"RL-"+model_path_index)
 
         for act in range(env.settings['RL']['number_actions']):
             for i in range(initializations):
@@ -192,7 +201,8 @@ if __name__ == '__main__':
                 name = '_action_%i_%i'%(act, i)
                 NAMES.append(name)
                 env.settings['Integration']['suffix'] = name
-                run_trajectory(env, action = act)
+                # run_trajectory(env, action = act)
+            TITLES.append(r'$\mu$ = %.1E'%(env.actions[act]))
 
         STATE = []
         CONS = []
@@ -207,6 +217,6 @@ if __name__ == '__main__':
         env = start_env()
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Energy_vs_tcomp.png'
-        plot_energy_vs_tcomp(env, STATE, CONS, TCOMP, NAMES, initializations, save_path, plot_traj_index=[0, 1, 2, 3, 4])
+        plot_energy_vs_tcomp(env, STATE, CONS, TCOMP, TITLES, initializations, save_path, plot_traj_index=[0, 1,5, 10])
 
 

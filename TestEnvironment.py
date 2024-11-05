@@ -106,7 +106,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 7 # number of the experiment to be run
+    experiment = 4 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -279,7 +279,7 @@ if __name__ == '__main__':
             env.settings['InitialConditions']['seed'] = seeds[i]
             env.settings['Training']["RemovePlanets"]= False
             env.settings['Integration']["max_error_accepted"] = 1e10
-            # run_trajectory(env, action = action, bridge = True) 
+            run_trajectory(env, action = action, bridge = True) 
 
         STATE = []
         CONS = []
@@ -427,7 +427,7 @@ if __name__ == '__main__':
                 NAMES.append(namei) 
                 TITLES.append('RL Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+                # run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
         STATE = []
         CONS = []

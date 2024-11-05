@@ -353,15 +353,19 @@ class Cluster_env(gym.Env):
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
         #################################
+        if self.settings['InitialConditions']['bodies_in_system'] == 'random':
+            nbodies = np.random.randint(5, self.settings['InitialConditions']['n_bodies'])
+        else:
+            nbodies = self.settings['InitialConditions']['n_bodies']
         # Stars
-        masses = new_powerlaw_mass_distribution(self.settings['InitialConditions']['n_bodies'],
+        masses = new_powerlaw_mass_distribution(nbodies,
                                             self.settings['InitialConditions']['ranges_mass'][0] |units.MSun,
                                             self.settings['InitialConditions']['ranges_mass'][1] |units.MSun, -2.35)
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         #stars=new_plummer_model(N,convert_nbody=converter)
-        # print(self.settings['InitialConditions']['seed'])
-        stars = new_fractal_cluster_model(self.settings['InitialConditions']['n_bodies'],
+        
+        stars = new_fractal_cluster_model(nbodies,
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
                                         random_seed = self.settings['InitialConditions']['seed'])

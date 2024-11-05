@@ -189,7 +189,7 @@ def train_net(env = None, suffix = '', model_path_pretrained = False):
                 indx = indx[0]
             max_reward[indx] =  avg_reward
             torch.save(policy_net.state_dict(), env.settings['Training']['savemodel'] +suffix+ 'model_weights'+str(episode_number)+'.pth') # save model
-        if episode_number %100 == 0:
+        if episode_number %20 == 0:
             max_reward = np.ones(10)*(-10000) # reset values
 
         # save training
