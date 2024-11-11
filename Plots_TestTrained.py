@@ -242,7 +242,7 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
         ax_i.tick_params(axis='both', which='major', labelsize=fontsize-3)
         # ax_i.tick_params(axis='y', labelsize=fontsize-3)
 
-    f.suptitle('Training time: %.2f min'%(trainingTime[-1]/60), y = 0.99, x = 0.23, fontsize = fontsize -3)
+    f.suptitle('Training time: %.2f min'%(trainingTime[episodes-1]/60), y = 0.99, x = 0.23, fontsize = fontsize -3)
 
     ax[-1].set_xlabel('Episode', fontsize = fontsize)
     ax[0].set_title('R', fontsize = fontsize)

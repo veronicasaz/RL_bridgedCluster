@@ -116,11 +116,11 @@ def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_inde
 
 def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titles_list, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
-    label_size = 20
+    label_size = 22
     linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
 
 
-    fig = plt.figure(figsize = (10,6))
+    fig = plt.figure(figsize = (15,8))
     gs1 = matplotlib.gridspec.GridSpec(1, 1, 
                                         left=0.1, wspace=0.3, hspace = 0.3, right = 0.93,
                                         top = 0.95, bottom = 0.12)
@@ -133,15 +133,17 @@ def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titl
         Energy_error, T_comp, R, action = calculate_errors(STATES_list[j], CONS_list[j], TCOMP_list[j])
         x = T_comp[-1, :]
         y = Energy_error[1][-1, :]
-        ax.plot(x, y, label = 'Seed %i'%(j+1), marker = 'o', color = colors[j])
+        ax.plot(x, y, label = 'Seed %i'%(j+1), marker = 'o', markersize = 12, color = colors[j])
         
         points_to_join_x[:, j] = x
         points_to_join_y[:, j] = y
 
         if j == 0:
             for i in range(len(Titles_list[j])): # annotate time-step of each point
-                ax.annotate(Titles_list[j][i], (x[i], y[i]*1.2), ha = 'center',
-            color = colors[j], fontsize = 12)
+                ax.annotate(Titles_list[j][i], (x[i], y[i]*1.3), ha = 'center',
+            color = colors[j], fontsize = 14,
+            bbox=dict(facecolor='w', alpha=0.7))
+            # backgroundcolor="w")
 
     
         
@@ -160,6 +162,7 @@ def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titl
     ax.tick_params(axis='both', which='major', labelsize=label_size-3)
         
     ax.legend(loc='upper right',  fontsize = label_size-2)
+    ax.grid(axis = 'y', alpha = 0.5)
         
     plt.savefig(save_path+'.png', dpi = 150)
     plt.show()
@@ -447,7 +450,7 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
     ax6.legend(loc='upper center', bbox_to_anchor=(0.45, -0.38), \
                        fancybox = True, ncol = 3, fontsize = label_size-2)
     plt.savefig(save_path, dpi = 150)
-    plt.show()
+    # plt.show()
 
 def plot_intializations(env, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
@@ -826,14 +829,13 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
     ax2 = fig.add_subplot(gs1[0, 0])
     ax3 = fig.add_subplot(gs1[1, 1])
 
-    markers = ['o', 'x', 's', 'o', 'x', '^']
-    order = [1,2,0, 3, 4, 5, 6]
-    alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7]
-
+    markers = ['o', 'x', 's', 'o', 'x', '^', 'o']
+    order = [1,2,0, 3, 4, 5, 6, 7]
+    alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7, 0.7]
 
     # Calculate the energy errors
     E_T = np.zeros((initializations, len(plot_traj_index)))
-    E_B = np.zeros((initializations, len(plot_traj_index)))
+    # E_B = np.zeros((initializations, len(plot_traj_index)))
     T_c = np.zeros((initializations, len(plot_traj_index)))
     # Labels = np.zeros((initializations, len(plot_traj_index)))
     nsteps_perepisode = np.zeros((initializations, len(plot_traj_index)))
@@ -841,11 +843,11 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
 
     for act in range(len(plot_traj_index)):
         for i in range(initializations):
-            nsteps_perepisode = len(cons[plot_traj_index[act]*initializations +i][:,0])
-            E_B[i, act] = abs(cons[plot_traj_index[act]*initializations + i][2, -1]) # absolute relative energy error
-            E_T[i, act] = abs(cons[plot_traj_index[act]*initializations + i][3, -1]) # absolute relative energy error
+            nsteps_perepisode = len(cons[act*initializations +i][:,0])
+            # E_B[i, act] = abs(cons[act*initializations + i][2, -1]) # absolute relative energy error
+            E_T[i, act] = abs(cons[act*initializations + i][3, -1]) # absolute relative energy error
 
-            T_c[i, act] = np.sum(tcomp[plot_traj_index[act]*initializations + i])/nsteps_perepisode # add individual computation times
+            T_c[i, act] = np.sum(tcomp[act*initializations + i])/nsteps_perepisode # add individual computation times
             # Labels[i, act] = plot_traj_index[act]
 
     def minimum(a, b):
@@ -866,9 +868,9 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
     max_y = 0 #random initial values
     for i in range(len(plot_traj_index)):  
         X = T_c[:, i]
-        Y = E_B[:, i]
+        Y = E_T[:, i]
         ax1.scatter(X, Y, color = colors[i], alpha = alphavalue, marker = markers[i],\
-                s = msize, label = Titles[plot_traj_index[i]], zorder =order[i])
+                s = msize, label = Titles[i], zorder =order[i])
         min_x = minimum(min_x, min(X))
         min_y = minimum(min_y, min(Y))
         max_x = maximum(max_x, max(X))
@@ -878,7 +880,7 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
 
     for i in range(len(plot_traj_index)):  
         X = T_c[:, i]
-        Y = E_B[:, i]
+        Y = E_T[:, i]
         ax2.hist(X, bins = binsx, color = colors[i],  alpha = alpha[i], edgecolor=colors[i], \
                  linewidth=1.2, zorder =order[i])
         ax2.set_yscale('log')
@@ -899,4 +901,172 @@ def plot_energy_vs_tcomp(env, STATES, cons, tcomp, Titles, initializations, save
         ax.tick_params(axis='both', which='major', labelsize=labelsize)
     
     plt.savefig(save_path+'tcomp_vs_Eerror_evaluate.png', dpi = 100)
-    plt.show()
+    # plt.show()
+
+
+def plot_energy_vs_tcomp_avg(env, STATES, cons, tcomp, Titles, initializations, save_path, plot_traj_index = [0,1,2]):
+    """
+    plot_EvsTcomp: plot energy error vs computation time for different cases
+    INPUTS:
+        values: list of the actions taken for each case
+        initializations: number of initializations used to generate the data
+        steps: steps taken
+        env: environment used
+    """
+    cases = len(STATES)
+
+    fig = plt.figure(figsize = (6,6))
+    gs1 = matplotlib.gridspec.GridSpec(1, 1, figure = fig, 
+                                    #    width_ratios = (3, 1), height_ratios = (1, 3), \
+                                       left=0.15, wspace=0.3, 
+                                       hspace = 0.2, right = 0.99,
+                                        top = 0.97, bottom = 0.11)
+    
+    msize = 50
+    alphavalue = 0.5
+    alphavalue2 = 0.9
+    
+    ax1 = fig.add_subplot(gs1[0, 0]) 
+
+    markers = ['o', 'x', 's', 'o', 'x', '^', 'o']
+    order = [1,2,0, 3, 4, 5, 6, 7]
+    alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7, 0.7]
+
+
+    # Calculate the energy errors
+    E_T = np.zeros((initializations, len(plot_traj_index)))
+    T_c = np.zeros((initializations, len(plot_traj_index)))
+    nsteps_perepisode = np.zeros((initializations, len(plot_traj_index)))
+    
+
+    for act in range(len(plot_traj_index)):
+        for i in range(initializations):
+            nsteps_perepisode = len(cons[act*initializations +i][:,0])
+            E_T[i, act] = abs(cons[act*initializations + i][3, -1]) # absolute relative energy error
+            T_c[i, act] = np.sum(tcomp[act*initializations + i])/nsteps_perepisode # add individual computation times
+
+    def minimum(a, b):
+        if a <= b:
+            return a
+        else:
+            return b
+        
+    def maximum(a, b):
+        if a >= b:
+            return a
+        else:
+            return b
+        
+    min_x = 10
+    min_y = 10
+    max_x = 0
+    max_y = 0 #random initial values
+    for i in range(len(plot_traj_index)):  
+        X = T_c[:, i]
+        Y = E_T[:, i]
+        Y = np.log10(Y)
+        print(Y)
+        # print(X)
+        ax1.errorbar(np.mean(X), np.mean(Y), 
+                     xerr = np.std(X), yerr = np.std(Y), 
+                    fmt='-o',
+                    #  color = colors[i], alpha = alphavalue, marker = markers[i],\
+                # s = msize, 
+                label = Titles[i], zorder =order[i])
+        min_x = minimum(min_x, min(X))
+        min_y = minimum(min_y, min(Y))
+        max_x = maximum(max_x, max(X))
+        max_y = maximum(max_y, max(Y))
+
+    labelsize = 12
+    ax1.legend(fontsize = labelsize)
+    ax1.set_xlabel('Total computation time (s)',  fontsize = labelsize)
+    ax1.set_ylabel(r'log$_{10}(\vert\Delta E\vert$) final',  fontsize = labelsize)
+    # ax1.set_yscale('log')
+    for ax in [ax1]:
+        ax.tick_params(axis='both', which='major', labelsize=labelsize)
+    
+    plt.savefig(save_path+'tcomp_vs_Eerror_evaluate2.png', dpi = 100)
+    # plt.show()
+
+def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, Titles_list, initializations, save_path, plot_traj_index = [0,1,2]):
+    """
+    plot_EvsTcomp: plot energy error vs computation time for different cases
+    INPUTS:
+        values: list of the actions taken for each case
+        initializations: number of initializations used to generate the data
+        steps: steps taken
+        env: environment used
+    """
+    cases = len(STATES_list[0])
+
+    fig = plt.figure(figsize = (18,7))
+    gs1 = matplotlib.gridspec.GridSpec(1, 3, figure = fig, 
+                                    #    width_ratios = (3, 1), height_ratios = (1, 3), \
+                                       left=0.07, wspace=0.4, 
+                                       hspace = 0.2, right = 0.99,
+                                        top = 0.95, bottom = 0.11)
+    
+    msize = 50
+    alphavalue = 0.5
+    alphavalue2 = 0.9
+    
+
+    markers = ['o', 'x', 's', 'o', 'x', '^', 'o']
+    order = [1,2,0, 3, 4, 5, 6, 7]
+    alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7, 0.7]
+
+
+    plot_title = ['$N = 5$', '$N = 9$', '$N = 15$']
+    for plot_i in range(3):
+        ax1 = fig.add_subplot(gs1[0, plot_i]) 
+        cons = cons_list[plot_i]
+        tcomp = tcomp_list[plot_i]
+        Titles = Titles_list[plot_i]
+
+        ax1.set_title(plot_title[plot_i], fontsize = 20)
+
+        # Calculate the energy errors
+        E_T = np.zeros((initializations, len(plot_traj_index)))
+        T_c = np.zeros((initializations, len(plot_traj_index)))
+        nsteps_perepisode = np.zeros((initializations, len(plot_traj_index)))
+
+        for act in range(len(plot_traj_index)):
+            for i in range(initializations):
+                nsteps_perepisode = len(cons[act*initializations +i][:,0])
+                E_T[i, act] = abs(cons[act*initializations + i][3, -1]) # absolute relative energy error
+                T_c[i, act] = np.sum(tcomp[act*initializations + i])/nsteps_perepisode # add individual computation times
+            
+        for i in range(len(plot_traj_index)):  
+            X = T_c[:, i]
+            Y = E_T[:, i]
+            Y = np.log10(Y)
+            # print(X)
+            if i == 0: 
+                msize = 15
+                marker = '^'
+            else: 
+                msize = 11
+                marker = 'o'
+            ax1.errorbar(np.mean(X), np.mean(Y), 
+                        xerr = np.std(X), yerr = np.std(Y), 
+                        # fmt='-o',
+                        color = colors[i], 
+                        #  alpha = alphavalue,
+                        marker = marker,\
+                        capsize = 5,
+                    markersize = msize, 
+                    label = Titles[i], zorder =order[i])
+
+            labelsize = 15
+            if plot_i == 0:
+                ax1.legend(fontsize = labelsize)
+
+            ax1.set_xlabel('Total computation time (s)',  fontsize = labelsize)
+            ax1.set_ylabel(r'log$_{10}(\vert\Delta E\vert$) final',  fontsize = labelsize)
+            # ax1.set_yscale('log')
+            for ax in [ax1]:
+                ax.tick_params(axis='both', which='major', labelsize=labelsize)
+        
+    plt.savefig(save_path+'tcomp_vs_Eerror_evaluate3.png', dpi = 100)
+    # plt.show()

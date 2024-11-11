@@ -106,7 +106,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 4 # number of the experiment to be run
+    experiment = 3 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
