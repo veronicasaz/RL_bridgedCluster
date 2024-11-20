@@ -1000,12 +1000,12 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
     """
     cases = len(STATES_list[0])
 
-    fig = plt.figure(figsize = (18,7))
+    fig = plt.figure(figsize = (18,5))
     gs1 = matplotlib.gridspec.GridSpec(1, 3, figure = fig, 
                                     #    width_ratios = (3, 1), height_ratios = (1, 3), \
                                        left=0.07, wspace=0.4, 
                                        hspace = 0.2, right = 0.99,
-                                        top = 0.95, bottom = 0.11)
+                                        top = 0.93, bottom = 0.11)
     
     msize = 50
     alphavalue = 0.5

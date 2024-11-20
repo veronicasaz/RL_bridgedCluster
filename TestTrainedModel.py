@@ -93,25 +93,25 @@ def load_reward(a, suffix = ''):
     return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward, trainingTime
 
 if __name__ == '__main__':
-    experiment = 5 # number of the experiment to be run
+    experiment = 4 # number of the experiment to be run
     seed = 1
 
     if experiment == 0: # Train
         env = Cluster_env()
         env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
         env.settings['Integration']['subfolder'] = 'currentTraining/'
-        train_net(env = env, suffix = "currentTraining/")
+        # train_net(env = env, suffix = "currentTraining/")
 
-        model_path = env.settings['Training']['savemodel'] + 'model_weights27.pth'
-        # train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
+        model_path = env.settings['Training']['savemodel'] + 'model_weights173.pth'
+        train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
 
     elif experiment == 1:
         # Plot training results
         env = Cluster_env()
-        # reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
-        #         load_reward(env, suffix = 'currentTraining/')
         reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
-                load_reward(env, suffix = '12_biggerNet!!/')
+                load_reward(env, suffix = 'currentTraining/')
+        # reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
+        #         load_reward(env, suffix = '24_from22_Model173_localTraining/')
         plot_test_reward(env, testReward, trainingTime)
         
     elif experiment == 2:
@@ -172,13 +172,13 @@ if __name__ == '__main__':
         env.settings['Training']['RemovePlanets'] = False
 
         env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 40
+        env.settings['Integration']['max_steps'] = 100
 
-        seed = 4
+        seed = 2
         env.settings['InitialConditions']['seed'] = seed
         env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
 
-        model_path_index = '173'
+        model_path_index = '721'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
         index_to_plot = [0, 1,3,6, 8, 10]
         
@@ -218,7 +218,7 @@ if __name__ == '__main__':
         
     
     
-    def start_env(bodies, subfolder, integrators, virial_ratio):
+    def start_env(bodies, subfolder, integrators, radius_cluster, t_step_param):
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = subfolder +'%ibodies/'%bodies
         env.settings['Integration']['savestate'] = True
@@ -226,17 +226,20 @@ if __name__ == '__main__':
         env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
         env.settings['Integration']['max_steps'] = 40
         env.settings['InitialConditions']['n_bodies'] = bodies
-        env.settings['InitialConditions']['virial_ratio'] = virial_ratio
+        env.settings['InitialConditions']['radius_cluster'] = radius_cluster
         env.settings['Integration']['integrator_global'] = integrators[0]
         env.settings['Integration']['integrator_local'] = integrators[1]
+        env.settings['RL']['t_step_param'] = t_step_param
+        env._initialize_RL() # To reset actions
         return env
     
-    def run_many(subfolder, integrators, virial_ratio):
+    def run_many(subfolder, integrators, radius_cluster, t_step_param = 1):
         initializations = 10
         seeds = np.arange(initializations)
         NAMES = []
         index_to_plot = [0, 1,3,6, 10]
         Bodies = [5, 9, 15]
+        # model_path_index = '173'
         model_path_index = '173'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
 
@@ -247,26 +250,25 @@ if __name__ == '__main__':
 
         for Body_i in range(len(Bodies)):
             TITLES = []
-
             for i in range(initializations):
-                env = start_env(Bodies[Body_i], subfolder, integrators, virial_ratio)
+                env = start_env(Bodies[Body_i], subfolder, integrators, radius_cluster, t_step_param)
                 env.settings['InitialConditions']['seed'] = seeds[i]
                 NAMES.append('_actionRL_%i'%i)
                 print(NAMES)
                 env.settings['Integration']['suffix'] = NAMES[i]
-                run_trajectory(env, action = 'RL', model_path=model_path)
+                # run_trajectory(env, action = 'RL', model_path=model_path)
             TITLES.append(r"RL-"+model_path_index)
 
             for a_i, act in enumerate(index_to_plot[1:]): # index_toplot includes RL
                 for i in range(initializations):
                     print(act, i)
-                    env = start_env(Bodies[Body_i], subfolder, integrators, virial_ratio)
+                    env = start_env(Bodies[Body_i], subfolder, integrators, radius_cluster, t_step_param)
                     env.settings['InitialConditions']['seed'] = seeds[i]
                     name = '_action_%i_%i'%(act-1, i)
                     NAMES.append(name)
                     env.settings['Integration']['suffix'] = name
-                    run_trajectory(env, action = act-1)
-                TITLES.append(r'$\mu$ = %.1E'%(env.actions[act-1]))
+                    # run_trajectory(env, action = act-1)
+                TITLES.append(r'$\mu$ = %.1E'%(env.actions[act-1]*t_step_param))
 
             STATE = []
             CONS = []
@@ -278,7 +280,7 @@ if __name__ == '__main__':
                 CONS.append(cons)
                 TCOMP.append(tcomp)
 
-            env = start_env(Bodies[Body_i], subfolder, integrators, virial_ratio)
+            env = start_env(Bodies[Body_i], subfolder, integrators, radius_cluster, t_step_param)
             save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
                 'Energy_vs_tcomp.png'
             plot_energy_vs_tcomp(env, STATE, CONS, TCOMP, TITLES, initializations, save_path, plot_traj_index=index_to_plot)
@@ -294,27 +296,28 @@ if __name__ == '__main__':
     if experiment == 4: # plot in tcomp vs energy together
         subfolder = '6_run_many/'
         integrators = ['Ph4', 'Huayno']
-        virial_ratio = 0.5
-        run_many(subfolder, integrators, virial_ratio)
+        radius_cluster = 0.1
+        run_many(subfolder, integrators, radius_cluster)
 
     elif experiment == 5: # plot in tcomp vs energy together different integrators
         subfolder = '8_run_many_integrators/'
         integrators = ['Hermite', 'Ph4']
-        virial_ratio = 0.5
-        run_many(subfolder, integrators, virial_ratio)
+        radius_cluster = 0.1
+        run_many(subfolder, integrators, radius_cluster)
 
     elif experiment == 6: # plot in tcomp vs energy together time-step parameter
         subfolder = '9_run_many_timestepparam/'
         integrators = ['Ph4', 'Huayno']
-        virial_ratio = 0.5
-        run_many(subfolder, integrators, virial_ratio)
+        radius_cluster = 0.1
+        t_step_param = 1e-1
+        run_many(subfolder, integrators, radius_cluster, t_step_param=t_step_param)
 
-    elif experiment == 7: # plot in tcomp vs energy together time-step parameter
+    elif experiment == 7: # plot in tcomp vs energy together density
         subfolder = '10_run_many_density/'
         integrators = ['Ph4', 'Huayno']
         # virial_ratio = [0.1, 0.8]
-        virial_ratio = 0.1
-        run_many(subfolder, integrators, virial_ratio)
+        radius_cluster = 0.05
+        run_many(subfolder, integrators, radius_cluster)
 
 
 

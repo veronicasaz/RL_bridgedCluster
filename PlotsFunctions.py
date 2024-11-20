@@ -37,14 +37,16 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
     elif axis == 'xz':
         indexes = [2, 4]
 
-    n_planets = np.shape(state)[1]
-    for j in range(n_planets):
+    n_bodies = np.shape(state)[1]
+    n_planets = np.count_nonzero(state[0, :, -1])
+    markers = ['o']*(n_bodies-n_planets+1) + ['x'] * (n_planets-1)
+    for j in range(n_bodies):
         x = state[0:steps, j, indexes[0]]/1.496e11
         y = state[0:steps, j, indexes[1]]/1.496e11
         m = state[0, j, 1]
         size_marker = np.log10(m)/10
 
-        ax.scatter(x[0], y[0], marker = markers[j], s = 20*size_marker,\
+        ax.scatter(x[0], y[0], marker = markers[j%len(markers)], s = 20*size_marker,\
                    c = colors[j%len(colors)], \
                     label = "Particle "+ name_planets[j])
         ax.plot(x[1:], y[1:], marker = None, 
@@ -53,7 +55,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
                     color = colors[j%len(colors)], \
                     alpha = 0.1)
         
-        ax.scatter(x[1:], y[1:], marker = markers[j], s = size_marker, \
+        ax.scatter(x[1:], y[1:], marker = markers[j%len(markers)], s = size_marker, \
                     c = colors[j%len(colors)])        
         
     if legend_on == True:
@@ -99,17 +101,18 @@ def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, st
 
     index_plot_colors = n_bodies-n_planets
     size_marker = 10
+    markers = ['o'] + ['x'] * (n_planets-1)
     for j in range(n_planets):
-        ax.scatter(X[0, j], Y[0, j], marker = markers[index_plot_colors+j],\
+        ax.scatter(X[0, j], Y[0, j], marker = markers[(index_plot_colors+j)%len(markers)],\
                    s = 1*size_marker,\
                     c = colors[(index_plot_colors+j)%len(colors)], \
                     label = "Particle "+ name_planets[j])
-        ax.plot(X[:, j], Y[:, j], marker = markers[index_plot_colors+j], 
+        ax.plot(X[:, j], Y[:, j], marker = markers[(index_plot_colors+j)%len(markers)], 
                     markersize = size_marker, \
                     linestyle = '-',\
                     color = colors[(index_plot_colors+j)%len(colors)], \
                     alpha = 0.1)
-        ax.scatter(X[:, j], Y[:, j], marker = markers[index_plot_colors+j], s = 3*size_marker, \
+        ax.scatter(X[:, j], Y[:, j], marker = markers[(index_plot_colors+j)%len(markers)], s = 3*size_marker, \
                     c = colors[(index_plot_colors+j)%len(colors)])        
         
     if legend_on == True:

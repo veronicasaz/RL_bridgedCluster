@@ -325,6 +325,9 @@ class Cluster_env(gym.Env):
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
+            
+            self.actions *= self.settings['RL']['t_step_param']
+
         # elif self.settings['RL']['action'] == 'combinations':
         #     low = self.settings['RL']['range_action'][0]
         #     high = self.settings['RL']['range_action'][-1]
@@ -517,7 +520,6 @@ class Cluster_env(gym.Env):
         # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
         t0_step = time.time()
-
         self.grav_bridge.evolve_model(t, timestep = self.actions[action] | self.units_time)
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
