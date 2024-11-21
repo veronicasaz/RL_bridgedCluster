@@ -519,17 +519,26 @@ class Cluster_env(gym.Env):
         # Apply action
         # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
+        timestep = self.actions[action]
+
+        # start loop for hybrid
         t0_step = time.time()
-        self.grav_bridge.evolve_model(t, timestep = self.actions[action] | self.units_time)
+        self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
         T = time.time() - t0_step
             
         # Get information for the reward
-        # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
         info_error = self._get_info(self.particles_joined)
+
+        # if self.settings['Integrations']['hybrid'] == True:
+        #     if (info_error[0]) > 0:
+        #         if np.log10(info_error[0]) > 0.5: #half an order of magnitude jump
+                        # timestep = timestep/2
+                    # redo evolve model with lower action
+
+
         state = self._get_state(self.particles_joined[0:self.n_stars], info_error[1])
-        # reward = self._calculate_reward(info_error[0], self.info_prev[0], self.E_total,  T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         # Using total energy
         reward = self._calculate_reward(info_error[1], self.info_prev[1], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
@@ -674,7 +683,7 @@ class Cluster_env(gym.Env):
             # return Delta_E_bridge/self.E_0_total, \
             # return Delta_E_bridge/self.E_0_total, \
             #       Delta_E_total/self.E_0_total
-            return Delta_E_rel/self.E_0_total, \
+            return Delta_E_rel, \
                   Delta_E_total\
                     
 

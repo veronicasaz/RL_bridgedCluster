@@ -1000,22 +1000,20 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
     """
     cases = len(STATES_list[0])
 
-    fig = plt.figure(figsize = (18,5))
+    fig = plt.figure(figsize = (18,7))
     gs1 = matplotlib.gridspec.GridSpec(1, 3, figure = fig, 
                                     #    width_ratios = (3, 1), height_ratios = (1, 3), \
                                        left=0.07, wspace=0.4, 
                                        hspace = 0.2, right = 0.99,
-                                        top = 0.93, bottom = 0.11)
+                                        top = 0.95, bottom = 0.2)
     
     msize = 50
     alphavalue = 0.5
     alphavalue2 = 0.9
-    
 
     markers = ['o', 'x', 's', 'o', 'x', '^', 'o']
     order = [1,2,0, 3, 4, 5, 6, 7]
     alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7, 0.7]
-
 
     plot_title = ['$N = 5$', '$N = 9$', '$N = 15$']
     for plot_i in range(3):
@@ -1034,8 +1032,8 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
         for act in range(len(plot_traj_index)):
             for i in range(initializations):
                 nsteps_perepisode = len(cons[act*initializations +i][:,0])
-                E_T[i, act] = abs(cons[act*initializations + i][3, -1]) # absolute relative energy error
-                T_c[i, act] = np.sum(tcomp[act*initializations + i])/nsteps_perepisode # add individual computation times
+                E_T[i, act] = abs(cons[act*initializations + i][-1,3]) # absolute relative energy error
+                T_c[i, act] = np.sum(tcomp[act*initializations + i]) # add individual computation times
             
         for i in range(len(plot_traj_index)):  
             X = T_c[:, i]
@@ -1046,21 +1044,34 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
                 msize = 15
                 marker = '^'
             else: 
-                msize = 11
+                msize = 12
                 marker = 'o'
             ax1.errorbar(np.mean(X), np.mean(Y), 
-                        xerr = np.std(X), yerr = np.std(Y), 
+                        xerr = np.std(X), 
+                        yerr = np.std(Y), 
                         # fmt='-o',
-                        color = colors[i], 
-                        #  alpha = alphavalue,
+                        color = colors[i],
+                         alpha = 1,
                         marker = marker,\
                         capsize = 5,
                     markersize = msize, 
-                    label = Titles[i], zorder =order[i])
+                    label = Titles[i],
+                    mec = 'k',
+                    ecolor = 'k',
+                    zorder =order[i])
+            
+            ax1.scatter(np.mean(X)*np.ones(len(Y)), Y, 
+                        color = colors[i], 
+                        marker = marker,\
+                    s = msize+30, 
+                    alpha = 0.9,
+                    zorder =order[i])
 
-            labelsize = 15
+            labelsize = 20
             if plot_i == 0:
-                ax1.legend(fontsize = labelsize)
+                # ax1.legend(fontsize = labelsize)
+                ax1.legend(bbox_to_anchor=(1.8, -0.28), fontsize = labelsize,\
+                           loc='lower center', ncol = 5)
 
             ax1.set_xlabel('Total computation time (s)',  fontsize = labelsize)
             ax1.set_ylabel(r'log$_{10}(\vert\Delta E\vert$) final',  fontsize = labelsize)
