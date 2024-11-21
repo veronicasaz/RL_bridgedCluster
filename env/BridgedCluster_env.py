@@ -279,6 +279,7 @@ class Modified_Bridge(bridge):
             offset=self.time_offsets[x]
             if(self.verbose):
                 print("evolving", x.__class__.__name__, end=' ')
+            x.set_time = self.time
             threads.append(threading.Thread(target=x.evolve_model, args=(tend-offset,)) )
             
         if self.use_threading:
@@ -447,6 +448,7 @@ class Cluster_env(gym.Env):
         # self.all_particles, \
         self.particles_global, self.particles_local, \
         self.particles_joined = self._initial_conditions_bridge()
+        self.particles_joined2 = self.particles_joined.copy()
         
 
         # TODO: tstep not implemented for now
@@ -468,6 +470,15 @@ class Cluster_env(gym.Env):
         self.channel = [self.grav_local.particles.new_channel_to(self.particles_joined),\
                         self.grav_global.particles.new_channel_to(self.particles_joined)
                         # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
+                        ]
+        
+        self.channel2 = [self.grav_local.particles.new_channel_to(self.particles_joined2),\
+                        self.grav_global.particles.new_channel_to(self.particles_joined2)
+                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
+                        ]
+        
+        self.channel_inverse = [self.particles_joined.new_channel_to(self.grav_local.particles),\
+                        self.particles_joined.new_channel_to(self.grav_global.particles)
                         ]
 
         # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
@@ -522,22 +533,62 @@ class Cluster_env(gym.Env):
         timestep = self.actions[action]
 
         # start loop for hybrid
-        t0_step = time.time()
-        self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
+        if self.settings['Integration']['hybrid'] == True:
+            t0_step = time.time()
+            delta_e_good = False # see if energy error between consecutive steps is good
+            counter = 0
+            counter_max = 4
+            error_tol = 0.2
+            # print(self.grav_local.particles)
+            while delta_e_good == False and counter < counter_max:
+
+                delta_t0 = self.grav_bridge.time
+                self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
+                delta_t = self.grav_bridge.time - delta_t0 
+                
+                for chan in range(len(self.channel2)):
+                    self.channel2[chan].copy()
+
+                # Get information for the reward
+                info_error = self._get_info(self.particles_joined2, save_step = False)
+                if info_error[0][1] == 0:
+                    error = np.log10(abs(info_error[0][0]))
+                else:
+                    error = np.log10(abs(info_error[0][0]))-np.log10(abs(info_error[0][1]))
+                
+                if error >error_tol and\
+                    counter < counter_max-1: #half an order of magnitude jump
+                    # self.grav_bridge.time -= delta_t # redo time
+                    timestep = timestep/2       
+                    t+= self.check_step | self.units_time
+                    for chan in range(len(self.channel_inverse)): #redo positions of particles
+                        self.channel_inverse[chan].copy()
+
+                    # print(self.grav_global.particles[0])
+                elif error> error_tol and counter >= counter_max-1: # run no matter what
+                    t+= self.check_step | self.units_time
+                    # self.grav_bridge.time -= delta_t # redo time
+                    timestep = timestep/2       
+                    for chan in range(len(self.channel_inverse)): #redo positions of particles
+                        self.channel_inverse[chan].copy()
+                    self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)                    
+
+                else:
+                    delta_e_good = True
+                counter += 1
+
+        else:
+            t0_step = time.time()
+            self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
+            # Get information for the reward
+            # info_error = self._get_info(self.particles_joined)
+            
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
+
         T = time.time() - t0_step
-            
-        # Get information for the reward
+        
         info_error = self._get_info(self.particles_joined)
-
-        # if self.settings['Integrations']['hybrid'] == True:
-        #     if (info_error[0]) > 0:
-        #         if np.log10(info_error[0]) > 0.5: #half an order of magnitude jump
-                        # timestep = timestep/2
-                    # redo evolve model with lower action
-
-
         state = self._get_state(self.particles_joined[0:self.n_stars], info_error[1])
         # Using total energy
         reward = self._calculate_reward(info_error[1], self.info_prev[1], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
@@ -545,7 +596,7 @@ class Cluster_env(gym.Env):
         
         if self.settings['Integration']['savestate'] == True:
             self._savestate(action, self.iteration, self.particles_joined, \
-                            [info_error[0], info_error[1]],\
+                            [info_error[0][0], info_error[1]],\
                             T, reward) # save initial state
             
         
@@ -568,7 +619,7 @@ class Cluster_env(gym.Env):
         info = dict()
         info['TimeLimit.truncated'] = False
         info['Energy_error'] = info_error[1]
-        info['Energy_error_rel'] = info_error[0]
+        info['Energy_error_rel'] = info_error[0][0]
         info['tcomp'] = T
 
         return state, reward, terminated, info
@@ -659,7 +710,7 @@ class Cluster_env(gym.Env):
         return g 
     
     # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
-    def _get_info(self, particles, initial = False):
+    def _get_info(self, particles, initial = False, save_step = True):
         """
         _get_info: get energy error, angular momentum error at current state
         OUTPUTS:
@@ -673,9 +724,12 @@ class Cluster_env(gym.Env):
         if initial == True:
             return E_total
         else:
-            # Delta_E_total = (E_total - self.E_0_total)
-            Delta_E_rel = (E_total - self.E_total_prev)
-            self.E_prev = E_total
+            Delta_E_rel = (E_total - self.E_0_total)/self.E_0_total
+            Delta_E_prev_rel = (self.E_total_prev - self.E_0_total)/self.E_0_total
+            # Delta_E_rel = E_total
+            # print("Errorrs, ",E_total/self.E_0_total, self.E_total_prev/self.E_0_total)
+            if save_step == True:
+                self.E_total_prev = E_total
             # Delta_E_bridge = Delta_E_total - energy_loss
             Delta_E_total = (E_total - self.E_0_total)/self.E_0_total
             # Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
@@ -683,7 +737,7 @@ class Cluster_env(gym.Env):
             # return Delta_E_bridge/self.E_0_total, \
             # return Delta_E_bridge/self.E_0_total, \
             #       Delta_E_total/self.E_0_total
-            return Delta_E_rel, \
+            return [Delta_E_rel, Delta_E_prev_rel], \
                   Delta_E_total\
                     
 

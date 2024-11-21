@@ -106,7 +106,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 3 # number of the experiment to be run
+    experiment = 1 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -123,24 +123,39 @@ if __name__ == '__main__':
     elif experiment == 1: # run bridge for all actions
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions/'
-        env.settings['InitialConditions']['seed'] = 2
+        env.settings['InitialConditions']['seed'] = 3
         env.settings['Training']['RemovePlanets'] = False
-        env.settings['Integration']['max_steps'] = 40
+        env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
+        env.settings['InitialConditions']['n_bodies'] = 9
+        env.settings['Integration']['max_steps'] = 100
         env.settings['Integration']["max_error_accepted"] = 1e10
+        env.settings['Integration']["hybrid"] = False
+
 
         NAMES = []
         for act in range(1):
-        # for act in range(env.settings['RL']['number_actions']):
-            print("Action", env.actions[act])
-            name = '_action'+str(act)
+            print("Action", env.actions[act+4])
+            name = '_action'+str(act) +str(env.settings['Integration']["hybrid"])
             NAMES.append(name)
-            env.settings['Integration']['suffix'] = NAMES[act]
-            run_trajectory(env, action = act)
+            print(name)
+            env.settings['Integration']['suffix'] = name
+            run_trajectory(env, action = act+7)
+
+        env.settings['Integration']["hybrid"] = True
+            
+        for act in range(1):
+            print("Action", env.actions[act+4])
+            name = '_action'+str(act) +str(env.settings['Integration']["hybrid"])
+            NAMES.append(name)
+            print(name)
+            env.settings['Integration']['suffix'] = name
+            run_trajectory(env, action = act+7)
 
         STATE = []
         CONS = []
         TCOMP = []
-        for act in range(1):
+        TITLES = ['No hybrid', "hybrid"]
+        for act in range(len(NAMES)):
         # for act in range(env.settings['RL']['number_actions']):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
@@ -150,7 +165,7 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison.png'
-        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path)
+        plot_trajs(env, STATE, CONS, TCOMP, TITLES, save_path)
 
     elif experiment == 2: # run convergence study
 
