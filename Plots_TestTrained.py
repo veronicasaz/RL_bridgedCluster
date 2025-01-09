@@ -183,6 +183,7 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
     # ax[0].plot(x_episodes, steps_perepisode, color = colors[0], alpha = 1)
     if episodes == None:
         episodes = len(test_reward) 
+    episodes = 200
     x_episodes = np.arange(episodes)
     
     REWARD_avg = []
@@ -217,12 +218,22 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
         #                   alpha = 1, fmt='o')
         y[plot] = np.array(y[plot])
         e[plot] = np.array(e[plot])
-        ax[plot].plot(x_episodes, y[plot] + e[plot], color = colors[1], \
-                          alpha = 0.2, marker = '.')
-        ax[plot].plot(x_episodes, y[plot] - e[plot], color = colors[1], \
-                          alpha = 0.2, marker = '.')
+
+        ax[plot].fill_between(x_episodes, y[plot] - e[plot], y[plot] + e[plot],\
+                         color = colors[1],\
+                         linewidth=4,  alpha = 0.3,
+                         edgecolor=None)
+        
         ax[plot].plot(x_episodes, y[plot], color= colors[0], \
-                          alpha = 1, marker = '.')
+                          alpha = 1, marker = '.', markersize = 3)
+
+
+        # ax[plot].plot(x_episodes, y[plot] + e[plot], color = colors[1], \
+        #                   alpha = 0.2, marker = '.')
+        # ax[plot].plot(x_episodes, y[plot] - e[plot], color = colors[1], \
+        #                   alpha = 0.2, marker = '.')
+        # ax[plot].plot(x_episodes, y[plot], color= colors[0], \
+        #                   alpha = 1, marker = '.')
 
     def maxN(elements, n):
         a = sorted(elements, reverse=True)[:n]
@@ -260,22 +271,20 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
     ax[2].set_yscale('log')
 
     # For 1
-    ax[0].set_ylim([-10e6, 10e4])
-    ax[1].set_ylim([-4, 4])
-    ax[2].set_ylim([1e-1, 3e0])
+    # ax[0].set_ylim([-10e6, 10e4])
+    # ax[1].set_ylim([-4, 4])
+    # ax[2].set_ylim([1e-1, 3e0])
 
     # For hermite 2
-    # ax[0].set_ylim([-10, 4])
-    # ax[1].set_ylim([-10, 0])
-    # ax[2].set_ylim([-15, -0.5])
-    # ax[3].set_ylim([0.0001, 0.003])
+    # ax[0].set_ylim([-10e6, 10e4])
+    # ax[1].set_ylim([-4, 4])
+    # ax[2].set_ylim([-2e-1, 7e0])
 
 
-    # For symple 2
-    # ax[0].set_ylim([-30, 5])
-    # ax[1].set_ylim([-12, 5])
-    # ax[2].set_ylim([-30, -0.8])
-    # ax[3].set_ylim([0.0001, 0.05])
+    # For hermite 3
+    ax[0].set_ylim([-25e6, 10e4])
+    ax[1].set_ylim([-4, 4])
+    ax[2].set_ylim([-1e-1, 7e0])
     
     path = a.settings['Integration']['savefile'] + a.settings['Integration']['subfolder']
     plt.savefig(path + 'test_reward.png', dpi = 100)

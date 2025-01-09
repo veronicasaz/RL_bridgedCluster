@@ -25,7 +25,8 @@
         "integrator_local": "Huayno",
         "max_error_accepted": 1e0,
         "plot": false,
-        "bridge": "modified"
+        "bridge": "modified",
+        "hybrid": false
     },
     "RL":
     {

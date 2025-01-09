@@ -12,7 +12,7 @@ import torch
 
 from env.BridgedCluster_env import Cluster_env
 from TrainRL import DQN
-from Plots_TestEnvironment import plot_trajs, \
+from Plots_TestEnvironment import plot_trajs, plot_trajs_noRL,\
     plot_intializations, plot_rewards, plot_reward_comparison,\
     plot_convergence, plot_trajs_reward, plot_convergence_togetherseeds,\
     plot_convergence_direct_integra
@@ -106,7 +106,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 1 # number of the experiment to be run
+    experiment = 6 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -125,12 +125,11 @@ if __name__ == '__main__':
         env.settings['Integration']['subfolder'] = '1_run_actions/'
         env.settings['InitialConditions']['seed'] = 3
         env.settings['Training']['RemovePlanets'] = False
-        env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
-        env.settings['InitialConditions']['n_bodies'] = 9
-        env.settings['Integration']['max_steps'] = 100
+        env.settings['InitialConditions']['bodies_in_system'] = "fixed"
+        env.settings['InitialConditions']['nbodies'] = 9
+        env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
         env.settings['Integration']["hybrid"] = False
-
 
         NAMES = []
         for act in range(1):
@@ -139,17 +138,17 @@ if __name__ == '__main__':
             NAMES.append(name)
             print(name)
             env.settings['Integration']['suffix'] = name
-            run_trajectory(env, action = act+7)
+            run_trajectory(env, action = act+2)
 
         env.settings['Integration']["hybrid"] = True
             
         for act in range(1):
-            print("Action", env.actions[act+4])
+            print("Action", env.actions[act])
             name = '_action'+str(act) +str(env.settings['Integration']["hybrid"])
             NAMES.append(name)
             print(name)
             env.settings['Integration']['suffix'] = name
-            run_trajectory(env, action = act+7)
+            run_trajectory(env, action = act+2)
 
         STATE = []
         CONS = []
@@ -350,19 +349,23 @@ if __name__ == '__main__':
         env.settings['Training']['RemovePlanets'] = False
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
+        env.settings['InitialConditions']["bodies_in_system"] = 'fixed'
         env.settings['InitialConditions']['n_bodies'] = 10
 
         NAMES = []
+        TITLES = []
 
         action = 2
         # Without bridge
         name = '_nobridge'
         NAMES.append(name) 
+        TITLES.append("Direct code")
         env.settings['Integration']['suffix'] = NAMES[0]
         run_trajectory(env, action = action, bridge = False) # Action does not affect
 
         # # With bridge
         name = '_orbridge'
+        TITLES.append("Bridge")
         NAMES.append(name)
         env.settings['Integration']['suffix'] = NAMES[1]
         env.settings['Integration']["bridge"] = 'original'
@@ -370,6 +373,7 @@ if __name__ == '__main__':
 
         # With modified bridge
         name = '_modbridge'
+        TITLES.append("Inclusive Bridge")
         NAMES.append(name)
         env.settings['Integration']['suffix'] = NAMES[2]
         env.settings['Integration']["bridge"] = 'modified'
@@ -387,7 +391,7 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison.png'
-        plot_trajs(env, STATE, CONS, TCOMP, NAMES, save_path, subplots=3)
+        plot_trajs_noRL(env, STATE, CONS, TCOMP, TITLES, save_path, subplots=3)
 
     elif experiment == 7: # Test direct numerical method for different number bodies
         env = Cluster_env()
@@ -395,12 +399,17 @@ if __name__ == '__main__':
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
 
+        # try this for more planets
+        # env.settings['InitialConditions']["disk_radius"] = [3, 50]
+        # env.settings['InitialConditions']["mass_disk"] = 1e-4
+
         NAMES = []
         TITLES = []
 
         bodies_list = [5, 10, 50, 100, 200, 500]
-        # bodies_list = [5, 10, 12]
-        seeds = [1, 2, 3, 4]
+        # bodies_list = [5, 10, 50]
+        # bodies_list = [100, 200, 500]
+        seeds = [3]
 
         for SED in seeds:
             env.settings['InitialConditions']['seed'] = SED
@@ -408,41 +417,56 @@ if __name__ == '__main__':
             # ph4
             name = '_nobridge_'
             for bodies in bodies_list:
-                env.settings['InitialConditions']['n_bodies'] = bodies
+                env.settings['InitialConditions']["bodies_in_system"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('Direct %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                # run_trajectory(env, action = 0, bridge = False) # Action does not affect
-
-            name = '_modbridge_accurate_'
-            for bodies in bodies_list:
-                env.settings['InitialConditions']['n_bodies'] = bodies
-                namei = str(SED) + name + str(bodies)
-                NAMES.append(namei) 
-                TITLES.append('Bridge fast %i'%bodies)
-                env.settings['Integration']['suffix'] = namei
-                # run_trajectory(env, action = 2, bridge = True) # Action does not affect
+                run_trajectory(env, action = 0, bridge = False) # Action does not affect
 
             name = '_modbridge_fast_'
+            env.settings['Integration']["hybrid"] = False
             for bodies in bodies_list:
-                env.settings['InitialConditions']['n_bodies'] = bodies
+                env.settings['InitialConditions']["bodies_in_system"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
-                TITLES.append('Bridge accurate %i'%bodies)
+                TITLES.append('Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                # run_trajectory(env, action = 6, bridge = True) # Action does not affect
+                run_trajectory(env, action = 4, bridge = True) 
+
+            
+            name = '_modbridge_accurate_'
+            env.settings['Integration']["hybrid"] = True
+            for bodies in bodies_list:
+                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('H-Bridge %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                run_trajectory(env, action = 4, bridge = True) 
 
             name = '_modbridgeRL_'
-            model_path_index = '44'
+            env.settings['Integration']["hybrid"] = False
+            model_path_index = '173'
             model_path = './Training_Results/model_weights'+model_path_index +'.pth'
             for bodies in bodies_list:
-                env.settings['InitialConditions']['n_bodies'] = bodies
+                env.settings['InitialConditions']["bodies_in_system"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('RL Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                # run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+
+            name = '_modbridgeHRL_'
+            env.settings['Integration']["hybrid"] = True
+            model_path = './Training_Results/model_weights'+model_path_index +'.pth'
+            for bodies in bodies_list:
+                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                namei = str(SED) + name + str(bodies)
+                NAMES.append(namei) 
+                TITLES.append('H-RL Bridge %i'%bodies)
+                env.settings['Integration']['suffix'] = namei
+                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
         STATE = []
         CONS = []

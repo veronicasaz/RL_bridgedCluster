@@ -11,7 +11,8 @@ import matplotlib
 import torch
 
 from PlotsFunctions import plot_planetary_system_trajectory, plot_planets_trajectory,\
-    plot_evolution, plot_distance_to_one, plot_actions_taken, plot_diff_state
+    plot_evolution, plot_distance_to_one, plot_actions_taken, plot_diff_state, calculate_planet_elements, \
+    plot_evolution_keplerian, eliminate_escaped_planets
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
         'mediumslateblue', 'deepskyblue', 'navy', 'black']
@@ -29,20 +30,24 @@ def calculate_errors(states, cons, tcomp):
     E_T_rel = np.zeros((steps, cases))
     T_c = np.zeros((steps, cases))
     Action = np.zeros((steps, cases))
+    Action_H = np.zeros((steps, cases))
     for i in range(cases):
         R[1:, i] = cons[i][1:steps, 1]
         E_T_rel[1:, i] = abs(cons[i][1:steps, 2]) # absolute relative energy error
         E_T[1:, i] = abs(cons[i][1:steps, 3]) # absolute relative energy error
         T_c[1:, i] = np.cumsum(tcomp[i][1:steps]) # add individual computation times
         Action[1:, i] = cons[i][1:steps, 0]
+        if len(cons[i][0,:])>4:
+            Action_H[1:, i] = cons[i][1:steps, 4]
 
-    return [E_T_rel, E_T], T_c, R, Action
+
+    return [E_T_rel, E_T], T_c, R, Action, Action_H
 
 def plot_convergence(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst'):
     # Setup plot
     label_size = 18
     linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
 
     for PLOT in range(len(STATES)):
         fig = plt.figure(figsize = (10,15))
@@ -130,7 +135,7 @@ def plot_convergence_togetherseeds(env, STATES_list, CONS_list, TCOMP_list, Titl
     points_to_join_x = np.zeros((actions, seeds))
     points_to_join_y = np.zeros((actions, seeds))
     for j in range(seeds):
-        Energy_error, T_comp, R, action = calculate_errors(STATES_list[j], CONS_list[j], TCOMP_list[j])
+        Energy_error, T_comp, R, action, action_H = calculate_errors(STATES_list[j], CONS_list[j], TCOMP_list[j])
         x = T_comp[-1, :]
         y = Energy_error[1][-1, :]
         ax.plot(x, y, label = 'Seed %i'%(j+1), marker = 'o', markersize = 12, color = colors[j])
@@ -181,7 +186,7 @@ def plot_convergence_direct_integra_row(env, Bodies, STATES, CONS, TCOMP, Titles
     ax = fig.add_subplot(gs1[:, :])
     ax1 = ax.twinx()
     seeds = len(STATES)
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x = Bodies
     y = Energy_error[1][-1, :]
     y2 = T_comp[-1, :]
@@ -217,8 +222,8 @@ def plot_convergence_direct_integra_row(env, Bodies, STATES, CONS, TCOMP, Titles
 def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Titles, save_path):
     # Setup plot
     label_size = 18
-    linestyle = ['--', ':', '-', '-', '-', '-', '-', '-', '-']
-    markers = ['o', 'x', 's', '^', 'x']
+    linestyle = ['-', '-', ':', '-', ':', '-', '-', '-', '-']
+    markers = ['o', 'x', 'x', '^', '^']
     markersize = 11
 
     fig = plt.figure(figsize = (12,6))
@@ -227,7 +232,7 @@ def plot_convergence_direct_integra(env, Bodies, seeds, STATES, CONS, TCOMP, Tit
                                         top = 0.95, bottom = 0.12)
     ax = fig.add_subplot(gs1[:, 0])
     ax1 = fig.add_subplot(gs1[:, 1])
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x = Bodies
     y = Energy_error[1][-1, :]
     y2 = T_comp[-1, :]
@@ -319,7 +324,7 @@ def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_ind
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
     ax2 = fig.add_subplot(gs1[1, :])
     ax3 = fig.add_subplot(gs1[2, :])
@@ -357,22 +362,33 @@ def plot_trajs_reward(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_ind
     plt.savefig(save_path, dpi = 150)
     plt.show()
 
-def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst', subplots = 2):
+def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst',
+                subplots = 2, hybrid = False):
     # Setup plot
     label_size = 18
     linewidth = 2
     fig = plt.figure(figsize = (10,15))
     gs1 = matplotlib.gridspec.GridSpec(6, subplots, 
                                     left=0.15, wspace=0.5, hspace = 0.5, right = 0.93,
-                                    top = 0.88, bottom = 0.11)
+                                    top = 0.85, bottom = 0.11)
     
     # Plot trajectories 2D
     name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
     # name_bodies = [r"$S_1$", r"$S_2$", r"$S_3$", r"$S_4$", r"$S_5$", r"$P_1$", r"$P_2$"]
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
 
     legend = True
     if plot_traj_index == 'bestworst':
         plot_traj_index = [0, len(STATES)-1] # plot best and worst
+    elif plot_traj_index == 'RLbest':
+        last_E_error = Energy_error[0][-1, 1:]
+        best_index = np.where(last_E_error == min(last_E_error))[0][0]
+        plot_traj_index = [0, best_index+1]
+    elif plot_traj_index == 'HRLbest':
+        last_E_error = Energy_error[0][-1, 2:]
+        best_index = np.where(last_E_error == min(last_E_error))[0][0]
+        plot_traj_index = [1, best_index+2]
+
     if subplots == 3:
         plot_traj_index= np.arange(3)
 
@@ -396,23 +412,28 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
         
         if case_i == 0: 
             legend = False
-            ax1.legend(loc='upper center', bbox_to_anchor=(1.2, 2.3), \
+            ax1.legend(loc='upper center', bbox_to_anchor=(1.2, 2.7), \
                        fancybox = True, ncol = 4, fontsize = label_size-2)
         
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1) *1e-2 # Multiplied by check step to have in myr
     ax2 = fig.add_subplot(gs1[2, :])
     ax3 = fig.add_subplot(gs1[3, :])
     ax4 = fig.add_subplot(gs1[4, :])
     ax6 = fig.add_subplot(gs1[5, :])
 
-    plot_distance_to_one(ax2, x_axis, STATES[0][1:], legend = False) # plot for the most accurate case
+    plot_distance_to_one(ax2, x_axis, STATES[plot_traj_index[0]][1:], legend = False) # plot for the most accurate case
 
     # Actions
-    plot_actions_taken(ax3, x_axis, action[1:, 0]) # only for RL
+
+    plot_actions_taken(ax3, x_axis, action[1:, 0], label = Titles[0]) # only for RL
+    if hybrid == True:
+        plot_actions_taken(ax3, x_axis, action[1:, 1], action_H = action_H[1:, 1],\
+                       color = 'darkred', marker = '.', label = Titles[1]) # only for H-RL
+        ax3.legend(fontsize = label_size-4, ncol = 2, loc ='upper right')
+
     n_actions = env.settings['RL']['number_actions']
     ax3.set_ylim([-1, n_actions+1])
     labels = np.arange(n_actions)[::3]
@@ -428,7 +449,7 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
             linestyle = '--'
         else:
             linestyle = '-'
-        plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case], \
+        plot_evolution(ax4, x_axis, Energy_error[0][1:, case], label = Titles[case], \
                        colorindex = case, linestyle = linestyle, linewidth = linewidth)
         plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case], \
                        colorindex = case, linestyle = linestyle, linewidth = linewidth)
@@ -447,7 +468,156 @@ def plot_trajs(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'b
     ax6.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
 
     # ax3.legend(fontsize = label_size -3)
-    ax6.legend(loc='upper center', bbox_to_anchor=(0.45, -0.38), \
+    ax6.legend(loc='upper center', bbox_to_anchor=(0.45, -0.4), \
+                       fancybox = True, ncol = 3, fontsize = label_size-2)
+    plt.savefig(save_path, dpi = 150)
+    # plt.show()
+
+def plot_trajs_noRL(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst',
+                subplots = 2, hybrid = False):
+    # Setup plot
+    label_size = 18
+    linewidth = 2
+    fig = plt.figure(figsize = (10,15))
+    gs1 = matplotlib.gridspec.GridSpec(4, subplots, 
+                                    left=0.15, wspace=0.7, hspace = 0.5, right = 0.95,
+                                    top = 0.85, bottom = 0.11)
+    
+    # Plot trajectories 2D
+    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
+
+    if subplots == 3:
+        plot_traj_index= np.arange(3)
+
+    for case_i, case in enumerate(plot_traj_index): 
+        ax1 = fig.add_subplot(gs1[0, case_i])
+        ax12 = fig.add_subplot(gs1[1, case_i])
+        plot_planets_trajectory(ax1, STATES[case], name_bodies, \
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], 
+                            legend_on = False, axislabel_on = False)
+        plot_planetary_system_trajectory(ax12, STATES[case], name_bodies, \
+                            labelsize=label_size, steps = env.settings['Integration']['max_steps'], 
+                            legend_on = False, axislabel_on = False)
+        ax1.set_title(Titles[case], fontsize = label_size )
+        ax1.set_xlabel('x (au)', fontsize = label_size)
+        ax12.set_xlabel('x (au)', fontsize = label_size)
+        if case_i == 0:
+            ax1.set_ylabel('y (au)', fontsize = label_size)
+            ax12.set_ylabel('y (au)', fontsize = label_size)
+
+        ax1.tick_params(axis='both', which='major', labelsize=label_size-4)
+        ax12.tick_params(axis='both', which='major', labelsize=label_size-4)
+        
+        if case_i == 1: 
+            legend = False
+            ax1.legend(loc='upper center', bbox_to_anchor=(0.45, 2.0), \
+                       fancybox = True, ncol = 4, fontsize = label_size-2)
+        
+
+    # Plot energy error
+    linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
+    x_axis = np.arange(1, len(T_comp), 1) *1e-2 # Multiplied by check step to have in myr
+    ax4 = fig.add_subplot(gs1[2, :])
+    ax6 = fig.add_subplot(gs1[3, :])
+
+    for case in range(len(STATES)):
+        if case == 0:
+            linestyle = '--'
+        else:
+            linestyle = '-'
+        plot_evolution(ax4, x_axis, Energy_error[1][1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
+        plot_evolution(ax6, x_axis, T_comp[1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
+    
+    for ax in [ax4,  ax6]:
+        ax.set_yscale('log')
+    for ax_i in [ax4, ax6]:
+        ax_i.tick_params(axis='both', which='major', labelsize=label_size-2)
+
+    ax4.set_xlabel('Time (Myr)', fontsize = label_size)
+    ax6.set_xlabel('Time (Myr)', fontsize = label_size)
+    ax4.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    ax6.set_ylabel(r'$T_{Comp}$ (s)', fontsize = label_size)
+
+    ax6.legend(loc='upper center', bbox_to_anchor=(0.45, -0.4), \
+                       fancybox = True, ncol = 3, fontsize = label_size-2)
+    plt.savefig(save_path, dpi = 150)
+    # plt.show()
+
+def plot_a_vs_e(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_index = 'bestworst', hybrid = False):
+    # Setup plot
+    label_size = 18
+    linewidth = 2
+    fig = plt.figure(figsize = (10,15))
+    gs1 = matplotlib.gridspec.GridSpec(4,5 ,
+                                    left=0.12, wspace=1.5, hspace = 0.5, right = 0.93,
+                                    top = 0.98, bottom = 0.14)
+    
+    ax1 = fig.add_subplot(gs1[0, 0:3])
+    ax2 = fig.add_subplot(gs1[1, 0:3])
+    ax3 = fig.add_subplot(gs1[1, 3:])
+    ax4 = fig.add_subplot(gs1[2, 0:3])
+    ax5 = fig.add_subplot(gs1[2, 3:])
+    ax6 = fig.add_subplot(gs1[3, 0:3])
+    ax7 = fig.add_subplot(gs1[3, 3:])
+    AX = [ax1, ax2, ax3, ax4, ax5, ax6, ax7]
+    
+    # Plot trajectories 2D
+    name_bodies = (np.arange(np.shape(STATES[0][[0]])[1])+1).astype(str)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
+    steps = len(Energy_error[1][:, 0])
+
+
+    # Plot energy error
+    linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
+    x_axis = np.arange(1, len(T_comp), 1) *1e-2 # Multiplied by check step to have in myr
+    
+
+    for case in range(len(STATES)):
+        if case == 0:
+            linestyle = '--'
+        else:
+            linestyle = '-'
+        plot_evolution(ax1, x_axis, Energy_error[1][1:, case], label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
+        
+        planets_elements = calculate_planet_elements(STATES[case], steps)
+
+        for planet_plot in range(3): # semi-major axis and distance
+            # planet_plot 1 to not included the central star
+            norm_dist = np.linalg.norm(planets_elements[1:, planet_plot+1, 0:3], axis = 1)
+            plot_evolution(AX[2*planet_plot+1], x_axis, norm_dist, label = Titles[case], \
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth,alpha = 0.7)
+            
+            plot_evolution_keplerian(AX[2*planet_plot+2], planets_elements[1:, planet_plot+1, 7], \
+                        planets_elements[1:, planet_plot+1, 6],
+                        label = Titles[case], alpha = 0.5,\
+                       colorindex = case, linestyle = linestyle, linewidth = linewidth)
+
+    
+    for ax in [ax1]:
+        ax.set_yscale('log')
+        ax.set_xlabel('Time (Myr)', fontsize = label_size)
+    for ax_i in AX:
+        ax_i.tick_params(axis='both', which='major', labelsize=label_size-2)
+        ax_i.tick_params(axis='both', which='minor', labelsize=label_size-2)
+    for i, ax_i in enumerate([ax2, ax4, ax6]):
+        ax_i.set_ylabel(r'$\vert \vec r_p - \vec r_S\vert$ (au)', fontsize = label_size)
+        ax_i.set_title("Planet %i"%(i+1), fontsize = label_size+2)
+        ax_i.set_xlabel('Time (Myr)', fontsize = label_size)
+    for ax_i in [ax3, ax5, ax7]:
+        ax_i.set_ylabel(r'$a$ (au)', fontsize = label_size)
+        ax_i.set_xlabel(r'$e$ ', fontsize = label_size)
+
+    
+    
+    ax1.set_ylabel(r'$\Delta E_{Total}$', fontsize = label_size)
+    
+
+    # ax3.legend(fontsize = label_size -3)
+    ax6.legend(loc='upper center', bbox_to_anchor=(0.85, -0.4), \
                        fancybox = True, ncol = 3, fontsize = label_size-2)
     plt.savefig(save_path, dpi = 150)
     # plt.show()
@@ -505,7 +675,7 @@ def plot_rewards(env, STATES, CONS, TCOMP, Titles, save_path):
     
     # Plot energy error
     linestyle = ['-', '--', '-.', '-', '-', '-', '-', '-', '-']
-    Energy_error, Energy_error_local, T_comp, R, action= calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, Energy_error_local, T_comp, R, action, action_H= calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
     ax2 = fig.add_subplot(gs1[0, :])
     ax3 = fig.add_subplot(gs1[1, :])
@@ -589,7 +759,7 @@ def plot_reward_comparison(env, STATES, CONS, TCOMP, Titles, save_path):
     
     # Plot energy error
     linestyle = ['-', '--', '-.', '-', '-', '-', '-', '-', '-']
-    [Energy_error, Energy_error_local], T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    [Energy_error, Energy_error_local], T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(1, len(T_comp), 1)
 
     W = np.array([[0, 1.0, 1.0, 10, 1e-2],
@@ -651,7 +821,7 @@ def plot_comparison_end(env, STATES, CONS, TCOMP, Titles, save_path, plot_traj_i
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, Energy_error_local, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, Energy_error_local, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
 
     x_axis = np.arange(1, len(T_comp), 1)
 
@@ -731,7 +901,7 @@ def plot_distance_action(env, STATES, CONS, TCOMP, Titles, save_path):
 
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(0, len(T_comp), 1)
     ax2 = fig.add_subplot(gs1[0, :])
     ax3 = fig.add_subplot(gs1[1, :])
@@ -769,7 +939,7 @@ def plot_state_diff(env, STATES, CONS, TCOMP, Titles, save_path):
     
     # Plot energy error
     linestyle = ['--', '--', '-', '-', '-', '-', '-', '-', '-']
-    Energy_error, T_comp, R, action = calculate_errors(STATES, CONS, TCOMP)
+    Energy_error, T_comp, R, action, action_H = calculate_errors(STATES, CONS, TCOMP)
     x_axis = np.arange(0, len(T_comp), 1)
     ax1 = fig.add_subplot(gs1[0, :])
     ax2 = fig.add_subplot(gs1[1, :])
@@ -989,7 +1159,10 @@ def plot_energy_vs_tcomp_avg(env, STATES, cons, tcomp, Titles, initializations, 
     plt.savefig(save_path+'tcomp_vs_Eerror_evaluate2.png', dpi = 100)
     # plt.show()
 
-def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, Titles_list, initializations, save_path, plot_traj_index = [0,1,2]):
+
+def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, Titles_list, \
+                                      initializations, save_path, plot_traj_index = [0,1,2], \
+                                        hybrid = False):
     """
     plot_EvsTcomp: plot energy error vs computation time for different cases
     INPUTS:
@@ -1015,7 +1188,20 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
     order = [1,2,0, 3, 4, 5, 6, 7]
     alpha = [0.5, 0.5, 0.9, 0.8, 0.9, 0.7, 0.7]
 
+    if hybrid == False:
+        colors2 = [colors[0]] + colors[2:]
+    else:
+        colors2 = colors
+    # else: 
+        # colors = colors[1:]
+    
+
+
     plot_title = ['$N = 5$', '$N = 9$', '$N = 15$']
+
+    # if hybrid == False:
+    #     colors = colors[1:]
+
     for plot_i in range(3):
         ax1 = fig.add_subplot(gs1[0, plot_i]) 
         cons = cons_list[plot_i]
@@ -1025,19 +1211,30 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
         ax1.set_title(plot_title[plot_i], fontsize = 20)
 
         # Calculate the energy errors
-        E_T = np.zeros((initializations, len(plot_traj_index)))
-        T_c = np.zeros((initializations, len(plot_traj_index)))
-        nsteps_perepisode = np.zeros((initializations, len(plot_traj_index)))
+        E_T = np.zeros((initializations, len(Titles)))
+        T_c = np.zeros((initializations, len(Titles)))
+        nsteps_perepisode = np.zeros((initializations, len(Titles)))
 
-        for act in range(len(plot_traj_index)):
+        for act in range(len(Titles)):
             for i in range(initializations):
                 nsteps_perepisode = len(cons[act*initializations +i][:,0])
-                E_T[i, act] = abs(cons[act*initializations + i][-1,3]) # absolute relative energy error
+                E_T[i, act] = abs(cons[act*initializations + i][-1, 3]) # absolute relative energy error
                 T_c[i, act] = np.sum(tcomp[act*initializations + i]) # add individual computation times
             
-        for i in range(len(plot_traj_index)):  
+                # eliminate_bool = eliminate_escaped_planets(STATES_list[plot_i][act*initializations+i], nsteps_perepisode)
+                # if eliminate_bool == True:
+                #     E_T[i, act] = 0
+                #     T_c[i, act] = 0
+
+
+        for i in range(len(Titles)):  
             X = T_c[:, i]
             Y = E_T[:, i]
+
+            index_remove = np.where(X ==0)
+            X = np.delete(X, index_remove)
+            Y = np.delete(Y, index_remove)
+
             Y = np.log10(Y)
             # print(X)
             if i == 0: 
@@ -1046,22 +1243,19 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
             else: 
                 msize = 12
                 marker = 'o'
+
             ax1.errorbar(np.mean(X), np.mean(Y), 
-                        xerr = np.std(X), 
-                        yerr = np.std(Y), 
+                        xerr = np.std(X), yerr = np.std(Y), 
                         # fmt='-o',
-                        color = colors[i],
-                         alpha = 1,
-                        marker = marker,\
-                        capsize = 5,
+                        color = colors2[i],marker = marker,\
+                         alpha = 1, capsize = 5,
                     markersize = msize, 
                     label = Titles[i],
-                    mec = 'k',
-                    ecolor = 'k',
+                    mec = 'k', ecolor = 'k',
                     zorder =order[i])
             
             ax1.scatter(np.mean(X)*np.ones(len(Y)), Y, 
-                        color = colors[i], 
+                        color = colors2[i], 
                         marker = marker,\
                     s = msize+30, 
                     alpha = 0.9,
@@ -1071,10 +1265,10 @@ def plot_energy_vs_tcomp_avg_together(env, STATES_list, cons_list, tcomp_list, T
             if plot_i == 0:
                 # ax1.legend(fontsize = labelsize)
                 ax1.legend(bbox_to_anchor=(1.8, -0.28), fontsize = labelsize,\
-                           loc='lower center', ncol = 5)
+                           loc='lower center', ncol = 6)
 
-            ax1.set_xlabel('Total computation time (s)',  fontsize = labelsize)
-            ax1.set_ylabel(r'log$_{10}(\vert\Delta E\vert$) final',  fontsize = labelsize)
+            ax1.set_xlabel(r'$T_{comp}$ (s)',  fontsize = labelsize)
+            ax1.set_ylabel(r'log$_{10}(\vert\Delta E_{Total}\vert$) ',  fontsize = labelsize)
             # ax1.set_yscale('log')
             for ax in [ax1]:
                 ax.tick_params(axis='both', which='major', labelsize=labelsize)

@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 
+from amuse.units import units, constants
+from amuse.ext.orbital_elements import get_orbital_elements_from_arrays, get_orbital_elements_from_binary
+
 from TrainRL import DQN
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
@@ -152,6 +155,39 @@ def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12,
     ax.set_yscale('log')
     return Dist
 
+def eliminate_escaped_planets(state, steps):
+    indexes = [2, 3, 4, 5, 6, 7] # for x, y z, vx, vy, vz
+
+    # Calculate center of gravity movement to remove it
+    # print(state)
+    n_bodies = np.shape(state)[1]
+    n_planets = np.count_nonzero(state[0, :, -1]) # not count star
+    counter = 0
+    BODIES = np.zeros((steps, n_planets, 12)) # cartesian + keplerian
+
+    subtract_central = np.zeros((steps, 6))
+    for j in range(n_bodies):
+        if state[0, j, -1] == 1: # planet type
+            if counter == 0: # for the central star
+                for z in range(6):
+                    subtract_central[:, z] = state[0:steps, j, indexes[z]]
+            for z in range(6):
+                BODIES[:, counter, z] = state[0:steps, j, indexes[z]] - subtract_central[:, z]
+            counter += 1 # count planet index
+    
+    # Evaluate evolution in time
+    counter = 0
+    index_escaped = []
+    for j in range(n_bodies):
+        if state[0, j, -1] == 1: # planet type
+            if counter >0:
+                distance_to_star = np.linalg.norm(BODIES[:, counter, 0:3], axis = 1)
+                if max(distance_to_star) > 2*distance_to_star[0]:
+                    index_escaped = True
+            counter += 1
+
+    return index_escaped
+    
 
 def plot_distance_to_one(ax, x_axis, state, labelsize = 12, 
                          legend = True):
@@ -223,7 +259,76 @@ def plot_diff_state(ax1, ax2,  x_axis, state1, state2, labelsize = 12,
 
     return Diff_r, Diff_v
 
-def plot_actions_taken(ax, x_axis, y_axis):
+def calculate_planet_elements(state, steps):
+    """
+    calculate evolution of planets
+    INPUTS:
+        state: array with the state of each of the particles at every step
+    """
+    indexes = [2, 3, 4, 5, 6, 7] # for x, y z, vx, vy, vz
+
+    # Calculate center of gravity movement to remove it
+    n_bodies = np.shape(state)[1]
+    n_planets = np.count_nonzero(state[0, :, -1]) 
+    M = np.zeros(n_planets)
+    counter = 0
+    BODIES = np.zeros((steps, n_planets, 12)) # cartesian + keplerian
+
+    # CARTESIAN
+    subtract_central = np.zeros((steps, 6))
+    for j in range(n_bodies):
+        if state[0, j, -1] == 1: # planet type
+            if counter == 0: # for the central star
+                for z in range(6):
+                    subtract_central[:, z] = state[0:steps, j, indexes[z]]
+            for z in range(6):
+                BODIES[:, counter, z] = state[0:steps, j, indexes[z]] - subtract_central[:, z]
+                M[counter] = state[0, j, 1]
+            counter += 1 # count planet index
+
+    # KEPLERIAN
+    for j in range(1, n_planets):
+        for i in range(steps):
+
+            orbital = get_orbital_elements_from_arrays(BODIES[i, j, 0:3] | units.m, \
+                                                       BODIES[i, j, 3:6] | units.m/ units.s, \
+                                                        M[0] | units.kg, 
+                                                        constants.G)
+            
+            BODIES[i, j, 6] = orbital[0].value_in(units.au)
+            BODIES[i, j, 7] = orbital[1]
+            BODIES[i, j, 8] = orbital[2].value_in(units.rad)
+            BODIES[i, j, 9] = orbital[3].value_in(units.rad)
+            BODIES[i, j, 10] = orbital[4].value_in(units.rad)
+            BODIES[i, j, 11] = orbital[5].value_in(units.rad)
+
+    BODIES[:, :, 0:6] /= 1.496e11 # move state to au, including a 
+
+    return BODIES
+
+def plot_evolution_keplerian(ax, x_axis, y_axis, label = None, color = None, 
+                   colorindex = None, linestyle = None, linewidth = 1, alpha = 1):
+    """
+    plot_evolution: plot steps vs another measurement
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        x_axis: time or steps to be plotted in the x axis
+        y_axis: data for the y axis
+        label: label for the legend of each data line
+        color: color selection for each line
+        colorindex: index of the general color selection
+        linestyle: type of line
+        linewidth: matplotlib parameter for the width of the line
+    """
+    if colorindex != None:
+        color = colors[(colorindex+2)%len(colors)] # start in the blues
+    ax.plot(x_axis, y_axis, color = color, marker = 'o', 
+            linestyle = linestyle, label = label, 
+            linewidth = linewidth, alpha = alpha)
+
+
+def plot_actions_taken(ax, x_axis, y_axis, action_H= [0], 
+                       label = None, color = None, marker = None):
     """
     plot_actions_taken: plot steps vs actions taken by the RL algorithm
     INPUTS:
@@ -231,9 +336,35 @@ def plot_actions_taken(ax, x_axis, y_axis):
         x_axis: time or steps to be plotted in the x axis
         y_axis: data for the y axis
     """
-    colors = colors2[0]
+    if color == None:
+        colors = colors2[0]
+    else:
+        colors = color
+
+    if marker == None:
+        marker = '.'
+    else:
+        marker = marker
     ax.plot(x_axis, y_axis, color = colors, linestyle = '-', alpha = 0.5,
-            marker = '.', markersize = 8)
+            marker = marker, markersize = 8, label = label)
+    
+    if len(action_H) >1:
+        print(action_H)
+        index_flag = np.where(action_H != 0)[0]
+        print(index_flag)
+        x = x_axis[index_flag]
+        # ax.scatter(x, np.ones(len(x))*9.5, 
+        #         marker = 'x',
+        #         color = colors)
+    
+        for note in range(len(x)):
+            ax.plot([x[note],x[note]], [y_axis[index_flag[note]], 9.5], 
+                # marker = 'x', 
+                    linestyle = '--',
+                alpha = 0.5, color = colors)
+            ax.annotate(int(action_H[index_flag][note]), xy=(x[note], 9.5),
+                        textcoords='offset points',
+                        ha='center', va='top', fontsize = 14)
     ax.grid(axis='y')
 
 def plot_evolution(ax, x_axis, y_axis, label = None, color = None, 
