@@ -92,6 +92,15 @@ class Modified_Bridge(bridge):
             if self.partners[x]:
                 DeltaE_0 = self.get_info_error(x)
 
+        # move star in cluster to center of mass
+        for x in self.systems:
+            if self.partners[x]:
+                index2 = self.particle_pairs[x][1]
+                center_0_r, center_0_v = self.get_center_of_mass(x)
+                for y in self.partners[x]:
+                    y.particles[index2].position = center_0_r
+                    y.particles[index2].velocity = center_0_v
+
         # E1 = DeltaE_0
 
         # self.save_partner = self.partners[self.systems[0]][0].particles.copy()
@@ -108,7 +117,7 @@ class Modified_Bridge(bridge):
                     # print("Energy error drift cluster %3E"%Delta_E)
                     self.get_updated_particles(x)
                     Delta_E, E = self.get_info_error(x, DeltaE_0)
-                    print("Energy error update one system %3E"%Delta_E)
+                    # print("Energy error update one system %3E"%Delta_E)
                     
                     # print('=======Kick===========')
                     # if first:      
@@ -116,8 +125,8 @@ class Modified_Bridge(bridge):
                     # else:
                     self.kick_one_system(x, timestep)
                     Delta_E, E = self.get_info_error(x, DeltaE_0)
-                    print("Energy error kick one system %3E"%Delta_E)
-                    print("************************")
+                    # print("Energy error kick one system %3E"%Delta_E)
+                    # print("************************")
                     # Delta_E, E = self.get_info_error(x, DeltaE_0)
                     # print("Energy error kick one system %3E"%Delta_E)
                     
@@ -205,17 +214,17 @@ class Modified_Bridge(bridge):
             index2 = self.particle_pairs[x][1]
 
             # Get difference in center of mass movement
-            # center_0_r, center_0_v = self.get_center_of_mass(x)
-            # center_1_r = y.particles[index2].position
-            # center_1_v = y.particles[index2].velocity
+            center_0_r, center_0_v = self.get_center_of_mass(x)
+            center_1_r = y.particles[index2].position
+            center_1_v = y.particles[index2].velocity
 
-            # diff_position = center_1_r - center_0_r
-            # diff_velocity =  center_1_v - center_0_v
+            diff_position = center_1_r - center_0_r
+            diff_velocity =  center_1_v - center_0_v
 
             # Get difference ignoring planets
-            x.particles[index1].mass = y.particles[index2].mass
-            diff_position = y.particles[index2].position - x.particles[index1].position 
-            diff_velocity = y.particles[index2].velocity - x.particles[index1].velocity
+            # x.particles[index1].mass = y.particles[index2].mass
+            # diff_position = y.particles[index2].position - x.particles[index1].position 
+            # diff_velocity = y.particles[index2].velocity - x.particles[index1].velocity
 
             x.particles.position += diff_position
             x.particles.velocity += diff_velocity
@@ -244,14 +253,13 @@ class Modified_Bridge(bridge):
             y.particles[index2].position = self.part_pos
             y.particles[index2].velocity = self.part_vel
 
-            diff_x = x.particles[index1].position - y.particles[index2].position
-            diff_y = x.particles[index1].velocity - y.particles[index2].velocity
+            # diff_x = center_0_r - y.particles[index2].position
+            # diff_y = center_0_v - y.particles[index2].velocity
 
             # take back movement of the center of mass
             # x.particles[index2].mass = self.part_mass
-            x.particles[index1].position -= diff_x
-            x.particles[index1].velocity -= diff_y
-
+            # x.particles[index1].position -= diff_x
+            # x.particles[index1].velocity -= diff_y
 
     def remove_common(self, x, y):
         self.part_mass =  y.particles[self.particle_pairs[x][1]].mass
@@ -325,7 +333,7 @@ class Modified_Bridge(bridge):
                     if(self.verbose):  print(x.__class__.__name__,"receives kick from",y.__class__.__name__, end=' ')
                     self.remove_common(x, y)            
                     kick_system(x, y.get_gravity_at_point, dt)
-                    self.restore_central_star(x)
+                    # self.restore_central_star(x)
                     if(self.verbose):  print(".. done")
         return 0
     
