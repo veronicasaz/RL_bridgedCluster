@@ -14,12 +14,23 @@ import threading
 
 from amuse.units import units, constants, nbody_system
 from amuse.units.quantities import sign
-from amuse.ext.bridge import bridge, kick_system
+from amuse.ext.bridge import bridge
 from amuse.units import quantities
+import matplotlib.pyplot as plt
 
 from amuse.lab import Particles, new_powerlaw_mass_distribution
 
 
+def kick_system(system, get_gravity, dt):
+    parts=system.particles.copy()
+    ax,ay,az=get_gravity(parts.radius,parts.x,parts.y,parts.z)
+    parts.vx=parts.vx+dt*ax
+    parts.vy=parts.vy+dt*ay
+    parts.vz=parts.vz+dt*az
+    channel=parts.new_channel_to(system.particles)
+    channel.copy_attributes(["vx","vy","vz"])   
+#    parts.copy_values_of_all_attributes_to(system.particles)
+    
 class Modified_Bridge(bridge):
     def __init__(self,verbose=False,method=None, use_threading=True, time=None):
         # super(Modified_Bridge, self).__init__()
@@ -77,9 +88,9 @@ class Modified_Bridge(bridge):
         first=True
         self._drift_time=self.time
         self._kick_time=self.time
-        # for x in self.systems:
-            # if self.partners[x]:
-                # DeltaE_0 = self.get_info_error(x)
+        for x in self.systems:
+            if self.partners[x]:
+                DeltaE_0 = self.get_info_error(x)
 
         # E1 = DeltaE_0
 
@@ -90,28 +101,38 @@ class Modified_Bridge(bridge):
             
             for x in self.systems:
                 if self.partners[x]:
-                    self.get_updated_particles(x)
+                    # print("******************")
+                    # print(x.particles)
+                    # print(self.partners[x][0].particles)
                     # Delta_E, E = self.get_info_error(x, DeltaE_0)
-                    # print("Energy error_ updateparticles %3E"%Delta_E)
+                    # print("Energy error drift cluster %3E"%Delta_E)
+                    self.get_updated_particles(x)
+                    Delta_E, E = self.get_info_error(x, DeltaE_0)
+                    print("Energy error update one system %3E"%Delta_E)
+                    
                     # print('=======Kick===========')
-                    if first:      
-                        self.kick_one_system(x, timestep/2)
-                    else:
-                        self.kick_one_system(x, timestep)
+                    # if first:      
+                    #     self.kick_one_system(x, timestep/2)
+                    # else:
+                    self.kick_one_system(x, timestep)
+                    Delta_E, E = self.get_info_error(x, DeltaE_0)
+                    print("Energy error kick one system %3E"%Delta_E)
+                    print("************************")
                     # Delta_E, E = self.get_info_error(x, DeltaE_0)
                     # print("Energy error kick one system %3E"%Delta_E)
                     
                     # print('=======Drift===========')
                     self.drift_one_system(x, self.time+timestep)
-                    # Delta_E, E = self.get_info_error(x, DeltaE_0)
+                    # Delta_E, E1 = self.get_info_error(x, DeltaE_0)
                     # print("Energy error drift one system %3E"%Delta_E)
+                    # print((E-E1)/DeltaE_0 )
 
                     # print('=======Update===========')
                     self.update_particles(x)
-
                     # Delta_E, E = self.get_info_error(x, DeltaE_0)
                     # print("Energy error update particles %3E"%Delta_E)
                 else:
+                    # print(x.particles)
                     self.drift_one_system(x, self.time+timestep)
             # print((E-E1, E1-DeltaE_0,  DeltaE_0-DeltaE_0)/DeltaE_0)
             # E1 = E
@@ -123,6 +144,17 @@ class Modified_Bridge(bridge):
             if self.partners[x]:
                 self.get_updated_particles(x)
         return 0
+        
+
+    def plot_particles(self, particles):
+        colors = ['black', 'red', 'green', 'yellow', 'orange', 'pink', 'blue']
+        for body in range(5):
+            x = particles[body].position[0].value_in(units.au)
+            y = particles[body].position[1].value_in(units.au)
+            plt.scatter(x, y, color = colors[body%len(colors)])
+        # plt.xlim((-3050, -2950))
+        # plt.ylim((-9300, -9000))
+        plt.show()
 
     def get_info_error(self, x, DeltaE_0 = None):
         particles_grouped = Particles()
@@ -130,6 +162,10 @@ class Modified_Bridge(bridge):
       
         for y in self.partners[x]:
             particles_grouped.add_particles(y.particles[0:-1])
+
+        # print(particles_grouped)
+
+        # self.plot_particles(particles_grouped)
 
         DeltaE = particles_grouped.kinetic_energy().value_in(self.units_energy)+\
                  particles_grouped.potential_energy(G = self.G).value_in(self.units_energy)
@@ -193,23 +229,46 @@ class Modified_Bridge(bridge):
             
             # center of mass approach
             # center_0_r, center_0_v = self.get_center_of_mass(x)
-
             # y.particles[index2].mass = self.total_mass # center of mass of the planetary system
             # y.particles[index2].position = center_0_r
             # y.particles[index2].velocity = center_0_v
 
-            y.particles[index2].mass = x.particles[index1].mass
-            y.particles[index2].position = x.particles[index1].position
-            y.particles[index2].velocity = x.particles[index1].velocity
+            # Moves particle twice because of kick
+            # y.particles[index2].mass = x.particles[index1].mass
+            # y.particles[index2].position = x.particles[index1].position
+            # y.particles[index2].velocity = x.particles[index1].velocity
+            # y.particles.add_particle(self.part)
+
+            # Updates with itsef in previous version
+            y.particles[index2].mass = self.part_mass
+            y.particles[index2].position = self.part_pos
+            y.particles[index2].velocity = self.part_vel
+
+            diff_x = x.particles[index1].position - y.particles[index2].position
+            diff_y = x.particles[index1].velocity - y.particles[index2].velocity
+
+            # take back movement of the center of mass
+            # x.particles[index2].mass = self.part_mass
+            x.particles[index1].position -= diff_x
+            x.particles[index1].velocity -= diff_y
 
 
     def remove_common(self, x, y):
-        # self.part = y.particles[self.particle_pairs[x][1]].copy()
+        self.part_mass =  y.particles[self.particle_pairs[x][1]].mass
+        self.part_pos = y.particles[self.particle_pairs[x][1]].position  
+        self.part_vel = y.particles[self.particle_pairs[x][1]].velocity
         # y.particles -= self.part
+
+        # x.particles[self.particle_pairs[x][0]].mass *= 0  # change so that it has no potential
+        # x.particles[self.particle_pairs[x][0]].position *= 0 
+        # x.particles[self.particle_pairs[x][0]].velocity *= 0 
 
         y.particles[self.particle_pairs[x][1]].mass *= 0  # change so that it has no potential
         y.particles[self.particle_pairs[x][1]].position *= 0 
         y.particles[self.particle_pairs[x][1]].velocity *= 0 
+
+    def restore_central_star(self, x):
+        x.particles[self.particle_pairs[x][0]].velocity = self.part_vel
 
     def synchronize_particles(self):
         for x in self.systems:
@@ -264,8 +323,9 @@ class Modified_Bridge(bridge):
             for y in self.partners[x]:
                 if x is not y:
                     if(self.verbose):  print(x.__class__.__name__,"receives kick from",y.__class__.__name__, end=' ')
-                    self.remove_common(x, y)
+                    self.remove_common(x, y)            
                     kick_system(x, y.get_gravity_at_point, dt)
+                    self.restore_central_star(x)
                     if(self.verbose):  print(".. done")
         return 0
     
