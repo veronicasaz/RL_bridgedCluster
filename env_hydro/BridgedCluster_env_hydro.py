@@ -26,6 +26,7 @@ from amuse.community.ph4.interface import ph4
 from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
 from amuse.community.gadget2.interface import Gadget2
+from amuse.community.fi.interface import Fi
 
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
 from amuse.lab import Particles, new_powerlaw_mass_distribution
@@ -236,6 +237,7 @@ class Cluster_env_hydro(gym.Env):
                                   convert_nbody=self.converter_local,\
                                 densitypower=1.5, Rmin=1, Rmax= Rmax_min,\
                                 q_out=1.0, discfraction=Mdisk/sun.mass).result
+        
         # com = disk.center_of_mass()
         disk.move_to_center()
         disk.position += sun.position
@@ -244,10 +246,10 @@ class Cluster_env_hydro(gym.Env):
         # print(sun)
         # print(disk[0:10])
         
-        disk_and_star = Particles()
-        if self.settings['Integration']["bridge"] != 'original':
-            disk_and_star.add_particle(sun)
-        disk_and_star.add_particle(disk)
+        # disk_and_star = Particles()
+        
+            # disk_and_star.add_particle(sun)
+        # disk_and_star.add_particle(disk)
 
         #################################
         # All together
@@ -255,13 +257,15 @@ class Cluster_env_hydro(gym.Env):
         cluster.add_particles(stars)
         self.n_stars = len(cluster)
         self.index_planetarystar = self.n_stars-1
+        if self.settings['Integration']["bridge"] == 'original':
+            stars -= sun
 
         cluster.add_particles(disk)
 
         # if self.settings['Training']['RemovePlanets'] == False:
             # cluster.add_particles(planets)
 
-        return stars, disk_and_star, cluster
+        return stars, [sun, disk], cluster
 
 
     ## BASIC FUNCTIONS
@@ -290,11 +294,11 @@ class Cluster_env_hydro(gym.Env):
         self.particles_joined2 = self.particles_joined.copy()
         
 
-        # TODO: tstep not implemented for now
         self.grav_global = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
         self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
         self.grav_global.particles.add_particles(self.particles_global)
-        self.grav_local.particles.add_particles(self.particles_local)
+        self.grav_local.dm_particles.add_particle(self.particles_local[0]) # add central star
+        self.grav_local.gas_particles.add_particles(self.particles_local[1]) # add disk
 
         # Bridge creation
         if self.settings['Integration']["bridge"] == 'original':
@@ -305,10 +309,14 @@ class Cluster_env_hydro(gym.Env):
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,)) # particles without the sun
         self.grav_bridge.add_system(self.grav_global)
 
+        # print(self.particles_joined)
         self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
-                        self.grav_local.particles.new_channel_to(self.particles_joined)
-                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
+                        self.grav_local.gas_particles.new_channel_to(self.particles_joined),\
+                        self.grav_local.dm_particles.new_channel_to(self.particles_joined)
                         ]
+        # self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
+        #                 self.grav_local.particles.new_channel_to(self.particles_joined)
+        #                 ]
         
         self.channel2 = [self.grav_global.particles.new_channel_to(self.particles_joined2),\
                          self.grav_local.particles.new_channel_to(self.particles_joined2)
@@ -559,6 +567,13 @@ class Cluster_env_hydro(gym.Env):
                 g = Gadget2(self.converter)
             else:
                 g = Gadget2()
+
+        elif integrator_type == 'Fi':
+            if self.settings['InitialConditions']['units'] == 'si':
+                g = Fi(self.converter)
+            else:
+                g = Fi()
+            g.parameters.timestep = 1 | units.yr
             # g.parameters.timestep_parameter =  tstep
 
         elif integrator_type == 'Symple': 
