@@ -15,8 +15,8 @@ from amuse.ext.orbital_elements import get_orbital_elements_from_arrays, get_orb
 
 from TrainRL import DQN
 
-colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
-        'mediumslateblue', 'deepskyblue', 'navy', 'black', 'red']
+colors = ['steelblue', 'darkgoldenrod', 'seagreen', 'coral',  \
+        'mediumslateblue', 'deepskyblue', 'blue', 'black', 'red']
 colors2 = ['navy']
 lines = ['-', '--', ':', '-.' ]
 # markers = ['o', 'x', '.', '^', 's']
@@ -124,6 +124,73 @@ def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, st
         ax.set_xlabel('x (au)', fontsize = labelsize)
         ax.set_ylabel('y (au)', fontsize = labelsize)
     
+def plot_hydro_system_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
+                            legend_on = True, axislabel_on = True, marker = 'o', axis = 'xy'):
+    """
+    plot_hydro_system_trajectory: plot trajectory of disk
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+        legend_on: True or False to display the legend
+    """
+    if axis == 'xy': 
+        indexes = [2, 3]
+    elif axis == 'xz':
+        indexes = [2, 4]
+
+    # Calculate center of gravity movement to remove it
+    n_bodies = np.shape(state)[1]
+    n_planets = np.count_nonzero(state[0, :, -1])
+    X = np.zeros((steps, n_planets))
+    Y = np.zeros((steps, n_planets))
+    M = np.zeros(n_planets)
+    counter = 0
+
+    for j in range(n_bodies):
+        if state[0, j, -1] == 1: # planet type
+            if counter == 0:
+                subtract_X = state[0:steps, j, indexes[0]]/1.496e11
+                subtract_Y = state[0:steps, j, indexes[1]]/1.496e11
+            X[:, counter] = state[0:steps, j, indexes[0]]/1.496e11 - subtract_X
+            Y[:, counter] = state[0:steps, j, indexes[1]]/1.496e11 - subtract_Y
+            M[counter] = state[0, j, 1]
+            counter += 1 # count planet index
+
+    index_plot_colors = n_bodies-n_planets
+    size_marker = 10
+    markers = ['o'] + ['.'] * (n_planets-1)
+    for j in range(n_planets):
+        if j == 1:
+            label = 'disk'
+            size_mag = 1
+        elif j == 0:
+            label = 'star'
+            size_mag = 4
+        else:
+            label = None
+        ax.scatter(X[0, j], Y[0, j], marker = markers[j],\
+                   s = size_mag*size_marker,\
+                    c = colors[(index_plot_colors+j)%len(colors)], \
+                    label = label)
+        ax.plot(X[:15, j], Y[:15, j], marker = markers[j], 
+                    markersize = size_marker, \
+                    linestyle = '-',\
+                    color = colors[(index_plot_colors+j)%len(colors)], \
+                    alpha = 0.1)
+        # ax.scatter(X[:, j], Y[:, j], marker = markers[(index_plot_colors+j)%len(markers)], s = 3*size_marker, \
+                    # c = colors[(index_plot_colors+j)%len(colors)])        
+        
+    # if legend_on == True:
+    ax.legend(fontsize = labelsize)
+    if axislabel_on == True:
+        ax.set_xlabel('x (au)', fontsize = labelsize)
+        ax.set_ylabel('y (au)', fontsize = labelsize)
+
+    # plt.show()
+
 def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12, 
                           steps = 30, legend = True):
     """
@@ -163,6 +230,7 @@ def eliminate_escaped_planets(state, steps):
     n_bodies = np.shape(state)[1]
     n_planets = np.count_nonzero(state[0, :, -1]) # not count star
     counter = 0
+    M = np.zeros(n_planets)
     BODIES = np.zeros((steps, n_planets, 12)) # cartesian + keplerian
 
     subtract_central = np.zeros((steps, 6))
@@ -173,18 +241,64 @@ def eliminate_escaped_planets(state, steps):
                     subtract_central[:, z] = state[0:steps, j, indexes[z]]
             for z in range(6):
                 BODIES[:, counter, z] = state[0:steps, j, indexes[z]] - subtract_central[:, z]
+            M[counter] = state[0, j, 1]
             counter += 1 # count planet index
     
+    for j in range(1, n_planets):
+        # for i in range(steps):
+        i = -1 # only at the last step required 
+        orbital = get_orbital_elements_from_arrays(BODIES[i, j, 0:3] | units.m, \
+                                                    BODIES[i, j, 3:6] | units.m/ units.s, \
+                                                    M[0] | units.kg, 
+                                                    constants.G)
+        
+        BODIES[i, j, 6] = orbital[0].value_in(units.au)
+        BODIES[i, j, 7] = orbital[1]
+        BODIES[i, j, 8] = orbital[2].value_in(units.rad)
+        BODIES[i, j, 9] = orbital[3].value_in(units.rad)
+        BODIES[i, j, 10] = orbital[4].value_in(units.rad)
+        BODIES[i, j, 11] = orbital[5].value_in(units.rad)
+
     # Evaluate evolution in time
     counter = 0
-    index_escaped = []
+    index_escaped = 0
     for j in range(n_bodies):
         if state[0, j, -1] == 1: # planet type
             if counter >0:
+                # with distance to star
                 distance_to_star = np.linalg.norm(BODIES[:, counter, 0:3], axis = 1)
-                if max(distance_to_star) > 2*distance_to_star[0]:
-                    index_escaped = True
+                # if max(distance_to_star) > 100*distance_to_star[0]:
+                #     index_escaped = 1
+                if max(BODIES[:, counter, 7]) > 0.99: # large eccentricity
+                    index_escaped = 1
             counter += 1
+
+    return index_escaped
+
+def calculate_lim_distance_to_one(state, steps):
+    """
+    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        x_axis: time or steps to be plotted in the x axis
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+    """
+    # steps = np.shape(state)[1]
+    Dist = []
+
+    index_escaped = 0
+    
+    last_index = np.where(state[0, :, 8] == 1)[0][0]
+    r0 = state[0:steps, last_index, 2:5]/1.496e11
+    for i in range(0, last_index): # for ecah particle except for the last one
+        r1 = state[0:steps, i, 2:5]/1.496e11
+        m = state[0, i, 1]
+        Dist.append(np.linalg.norm(r0-r1, axis = 1))
+        if min(Dist[i]) < 1000:
+            index_escaped = 1
 
     return index_escaped
     
@@ -283,7 +397,7 @@ def calculate_planet_elements(state, steps):
                     subtract_central[:, z] = state[0:steps, j, indexes[z]]
             for z in range(6):
                 BODIES[:, counter, z] = state[0:steps, j, indexes[z]] - subtract_central[:, z]
-                M[counter] = state[0, j, 1]
+            M[counter] = state[0, j, 1]
             counter += 1 # count planet index
 
     # KEPLERIAN

@@ -168,7 +168,7 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
             [Reward, Energy error, Computation time]
     """
     f, ax = plt.subplots(3, 1, figsize = (10,7))
-    plt.subplots_adjust(left=0.08, right=0.97, top=0.94, \
+    plt.subplots_adjust(left=0.1, right=0.97, top=0.94, \
                         bottom=0.1, hspace = 0.6)
     fontsize = 18
 
@@ -253,12 +253,12 @@ def plot_test_reward(a, test_reward, trainingTime, episodes = None):
         ax_i.tick_params(axis='both', which='major', labelsize=fontsize-3)
         # ax_i.tick_params(axis='y', labelsize=fontsize-3)
 
-    f.suptitle('Training time: %.2f min'%(trainingTime[episodes-1]/60), y = 0.99, x = 0.23, fontsize = fontsize -3)
+    f.suptitle('Training time: %.0f min'%(trainingTime[episodes-1]/60), y = 0.99, x = 0.23, fontsize = fontsize -3)
 
     ax[-1].set_xlabel('Episode', fontsize = fontsize)
-    ax[0].set_title('R', fontsize = fontsize)
-    ax[1].set_title(r'$log_{10}(\vert \Delta E\vert)$', fontsize = fontsize)
-    ax[2].set_title(r'$T_{comp}$ (s)', fontsize = fontsize)
+    ax[0].set_ylabel('R', fontsize = fontsize)
+    ax[1].set_ylabel(r'$log_{10}(\vert \Delta E\vert)$', fontsize = fontsize)
+    ax[2].set_ylabel(r'$T_{comp}$ (s)', fontsize = fontsize)
     # ax[2].set_title(r'$log_{10}(\vert \Delta E_{bridge}\vert)$', fontsize = fontsize)
     # ax[2].set_title(r'$log_{10}(\vert \Delta E\vert) - log_{10}(\vert \Delta E_{prev}\vert)$', fontsize = fontsize)
     

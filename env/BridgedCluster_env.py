@@ -25,6 +25,7 @@ from amuse.community.hermite.interface import Hermite
 from amuse.community.ph4.interface import ph4
 from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
+from amuse.community.bhtree.interface import BHTree
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
 from amuse.lab import Particles, new_powerlaw_mass_distribution
 from amuse.ext.bridge import bridge, kick_system
@@ -32,7 +33,7 @@ from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
 from amuse.ic import make_planets_oligarch
 
 from amuse.units import quantities
-from env.InclusiveBridge import Modified_Bridge
+from env.InclusiveBridgeSep import Modified_Bridge
 
 def plot_state(bodies):
     v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
@@ -146,7 +147,7 @@ class Cluster_env(gym.Env):
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         #stars=new_plummer_model(N,convert_nbody=converter)
-        
+        print(nbodies)
         stars = new_fractal_cluster_model(nbodies,
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
@@ -502,7 +503,14 @@ class Cluster_env(gym.Env):
                 g = symple(redirection ='none')
             g.initialize_code()
             # g.parameters.timestep = tstep | self.units_time
-            
+
+        elif integrator_type == 'BHTree':
+            if self.settings['InitialConditions']['units'] == 'si':
+                g = BHTree(self.converter)
+            else:
+                g = BHTree()
+            # g.parameters.timestep 
+
         return g 
     
     # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
@@ -634,7 +642,7 @@ class Cluster_env(gym.Env):
         """
         print("Iteration: %i/%i, Delta E_E total = %0.3E, Action: %i, Reward: %.4E"%(self.iteration, \
                                  self.settings['Integration']['max_steps'],\
-                                 info[1],\
+                                 info[0][2],\
                                  action, \
                                  reward))
             
