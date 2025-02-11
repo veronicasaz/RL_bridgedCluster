@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import time
 from setuptools import setup
 import json
+import random
 
 import threading
 
@@ -26,27 +27,121 @@ from amuse.community.ph4.interface import ph4
 from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
 from amuse.community.gadget2.interface import Gadget2
-from amuse.community.fi.interface import Fi
+# from amuse.community.fi.interface import Fi
 
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
-from amuse.lab import Particles, new_powerlaw_mass_distribution
-from amuse.ext.bridge import bridge, kick_system
+# from amuse.lab import Particles, new_powerlaw_mass_distribution
+from amuse.lab import *
+# from amuse.ext.bridge import bridge, kick_system
+from amuse.couple import bridge
 from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
 from amuse.ic import make_planets_oligarch
 
 from amuse.units import quantities
 from amuse.ext.protodisk import ProtoPlanetaryDisk
 
+from scipy.interpolate import griddata
+from scipy.stats import gaussian_kde
+
 from env.InclusiveBridgeSep import Modified_Bridge
 
+def renormalize(arr):
+    return (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
 
-def plot_state(bodies):
-    v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
-    plt.scatter(bodies.x.value_in(units.au),\
-                bodies.y.value_in(units.au), \
-                c=v.value_in(units.kms), alpha=0.5)
-    plt.colorbar()
-    plt.show()
+def plot_contours(x, y, cmap):
+    xmin = -3000
+    ymin = -4000
+    xmax = 3000
+    ymax = 2000
+    
+    xi = np.linspace(xmin, xmax, 100)
+    yi = np.linspace(ymin, ymax, 100)
+    X, Y = np.meshgrid(xi, yi)
+
+    # Calculate the density of points
+    xy = np.vstack([x,y])
+    z = gaussian_kde(xy)(xy)
+    z = renormalize(z)
+    #print(z)
+    #z = z/np.min(z)
+
+    # Interpolate Z values on the grid
+    #Z = griddata((x, y), z, (X, Y), method='linear', fill_value=0)
+    Z = griddata((x, y), z, (X, Y), method='nearest', fill_value=0)
+    # print(np.min(Z), np.max(Z))
+
+    contour = plt.contour(X, Y, Z, levels=[0.003, 0.01, 0.03, 0.1, 0.3, 0.9], cmap=cmap)
+
+def plot_heatmap(allx, ally, cmap):
+    xmin = -3000
+    ymin = -4000
+    xmax = 3000
+    ymax = 2000
+    x = []
+    y = []
+    for i in range(len(allx)):
+        if allx[i]>xmin and allx[i]<xmax and ally[i]>ymin and ally[i]<ymax:
+            x.append(allx[i])
+            y.append(ally[i])
+
+    heatmap, xedges, yedges = np.histogram2d(x, y, bins=40)
+
+    #plt.imshow(heatmap.T, origin='lower', extent=[xmin, xmax, ymin, ymax], cmap=cmap)
+    #plt.scatter(x, y, s=1, c='k')
+    plt.imshow(heatmap.T, origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+               cmap=cmap)
+    
+def plot_state_disk(bodies_final, states, path):
+    starwdisk = bodies_final[0]
+    ring = bodies_final[3:]
+    stars = bodies_final[0:3]
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    xmin = -3000
+    ymin = -4000
+    xmax = 3000
+    ymax = 2000
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_aspect("equal")
+
+    dpos = ring.position-starwdisk.position
+    dvel = ring.velocity-starwdisk.velocity
+    m = starwdisk.mass + ring.mass
+
+    orbits_kepler = get_orbital_elements_from_arrays(dpos, dvel, m, G=constants.G)
+    orbits = dict()
+    orbits['x'] = dpos[0]
+    orbits['y'] = dpos[1]
+    ring.semimajor_axis = np.array(orbits_kepler)[0, :]
+    ring.eccentricity = np.array(orbits_kepler)[1 ,:]
+
+    bound = ring[ring.eccentricity<1]
+    unbound = ring[ring.eccentricity>=1]
+
+    # for latest state
+    plot_heatmap(unbound.x.value_in(units.au), unbound.y.value_in(units.au), "Reds")
+    plot_contours(bound.x.value_in(units.au), bound.y.value_in(units.au), "cool")
+
+    plt.scatter(bound.x.value_in(units.au), bound.y.value_in(units.au), s=2, c='orange')
+    plt.scatter(stars.x.value_in(units.au), stars.y.value_in(units.au), s=100, c='k')
+    plt.scatter(starwdisk.x.value_in(units.au), starwdisk.y.value_in(units.au), s=100, c='r')
+
+    # x = np.array(x).T
+    # y = np.array(y).T
+    bodies = len(states[0, :3,0 ])
+    for xi in range(bodies):
+        if xi == 0: 
+            color = 'red'
+        else:
+            color = 'black'
+        x = states[1:, xi, 2] /1.496e11
+        y = states[1:, xi, 3] /1.496e11
+        # print(x, y)
+        plt.plot(x, y, c=color)
+    plt.savefig(path+'trajectory.png')
+    # plt.show()
+
 
 
 def load_json(filepath):
@@ -82,7 +177,6 @@ class Cluster_env_hydro(gym.Env):
     def __init__(self, render_mode = None):
         self.settings = load_json("./settings_integration_hydro.json")
         self.n_bodies = self.settings['InitialConditions']['n_bodies']
-
         
         self._initialize_RL()
 
@@ -110,18 +204,18 @@ class Cluster_env_hydro(gym.Env):
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
+            # self.actions = np.linspace(low, high, \
+            #                            num = n_actions, endpoint = True)
+            print(self.actions)
             
             self.actions *= self.settings['RL']['t_step_param']
-
-
-
         
         self.action_space = gym.spaces.Discrete(len(self.actions)) 
 
         # Training parameters
         self.W = self.settings['RL']['weights']
-
-    def _initial_conditions_bridge(self):
+        
+    def _initial_conditions(self):
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
         #################################
@@ -136,7 +230,7 @@ class Cluster_env_hydro(gym.Env):
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         #stars=new_plummer_model(N,convert_nbody=converter)
-        
+        print(nbodies)
         stars = new_fractal_cluster_model(nbodies,
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
@@ -155,27 +249,18 @@ class Cluster_env_hydro(gym.Env):
         sun.name = "Sun"
 
         #################################
-        # Planetary system
-        inner_radius_disk = self.settings['InitialConditions']['disk_radius'][0] | units.au
-        # outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au/np.sqrt(sun.mass.value_in(units.MSun))
-        outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au
-        mass_disk = self.settings['InitialConditions']['mass_disk'] *sun.mass
-        ps = make_planets_oligarch.new_system(sun.mass,
-                                            sun.radius,
-                                            inner_radius_disk,
-                                            outer_radius_disk,
-                                            mass_disk)
-        
-        planets = ps.planets[0]
-        planets.name = "planet"
-        planets.type = "planet"
-        planets.position += sun.position
-        planets.velocity += sun.velocity
-
-        planetary_system = Particles()
-        planetary_system.add_particle(sun)
-        if self.settings['Training']['RemovePlanets'] == False:
-            planetary_system.add_particles(planets)
+        Rmin = self.settings['InitialConditions']['disk_radius'][0] | units.au
+        Rmax = self.settings['InitialConditions']['disk_radius'][1] | units.au
+        Mdisk = self.settings['InitialConditions']['mass_disk']* sun.mass
+        self.converter_local = nbody_system.nbody_to_si(sun.mass, Rmin )
+        disk = ProtoPlanetaryDisk(self.settings['InitialConditions']['Ndisk'], \
+                                densitypower=1.5, Rmin=1, Rmax= Rmax/Rmin,\
+                                q_out=10, discfraction=Mdisk/sun.mass,\
+                                convert_nbody=self.converter_local).result
+        disk.rotate(30|units.deg, 0|units.deg, 0|units.deg)
+        disk.position += sun.position
+        disk.velocity += sun.velocity
+        disk.name = "disk"
 
         #################################
         # All together
@@ -188,13 +273,14 @@ class Cluster_env_hydro(gym.Env):
             stars -= sun
 
         if self.settings['Training']['RemovePlanets'] == False:
-            cluster.add_particles(planets)
+            cluster.add_particles(disk)
 
-        print("Planets: ", len(planetary_system)-1)
+        print("Disk particles: ", len(disk))
 
-        return stars, planetary_system, cluster
-        
+        return stars, [sun, disk], cluster
+    
     def _initial_conditions_hydro(self):
+        random.seed(self.settings['InitialConditions']['seed'])
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
         #################################
@@ -202,54 +288,43 @@ class Cluster_env_hydro(gym.Env):
             nbodies = np.random.randint(5, self.settings['InitialConditions']['n_bodies'])
         else:
             nbodies = self.settings['InitialConditions']['n_bodies']
-        # Stars
-        masses = new_powerlaw_mass_distribution(nbodies,
-                                            self.settings['InitialConditions']['ranges_mass'][0] |units.MSun,
-                                            self.settings['InitialConditions']['ranges_mass'][1] |units.MSun, -2.35)
+            
+        masses = 0.5|units.MSun
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
-        self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
+        # self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
+        self.converter = nbody_system.nbody_to_si(1|units.MSun, 0.01|units.pc)
         #stars=new_plummer_model(N,convert_nbody=converter)
-        
-        stars = new_fractal_cluster_model(nbodies,
+
+        stars = new_fractal_cluster_model(N = nbodies, 
                                         fractal_dimension=1.6,
+                                        virial_ratio = self.settings['InitialConditions']['virial_ratio'],
                                         convert_nbody=self.converter,
                                         random_seed = self.settings['InitialConditions']['seed'])
 
-        stars.mass = masses
         stars.name = "star"
-        stars.type = "star"
-        stars.move_to_center()
-        stars.scale_to_standard(self.converter, virial_ratio = self.settings['InitialConditions']['virial_ratio'])
+        # stars.type = "star"
+        stars.mass = masses
 
         #################################
         # Star to get planets
-        # sun = stars.random_sample(1)[0]
-        sun = stars[-1]
+        sun = stars[0]
+        sun.mass = 1|units.MSun
         sun.name = "Sun"
 
         #################################
         # Hydro system
-        Rmin = self.settings['InitialConditions']['disk_radius'][0] 
-        Rmax_min = self.settings['InitialConditions']['disk_radius'][1]/Rmin
-        Mdisk = self.settings['InitialConditions']['mass_disk'] | units.MSun
-        self.converter_local=nbody_system.nbody_to_si(sun.mass, Rmin | units.au)
+    
+        Rmin = self.settings['InitialConditions']['disk_radius'][0] | units.au
+        Rmax = self.settings['InitialConditions']['disk_radius'][1] | units.au
+        Mdisk = self.settings['InitialConditions']['mass_disk']* sun.mass
+        self.converter_local = nbody_system.nbody_to_si(sun.mass, Rmin )
         disk = ProtoPlanetaryDisk(self.settings['InitialConditions']['Ndisk'], \
-                                  convert_nbody=self.converter_local,\
-                                densitypower=1.5, Rmin=1, Rmax= Rmax_min,\
-                                q_out=1.0, discfraction=Mdisk/sun.mass).result
-        
-        # com = disk.center_of_mass()
-        disk.move_to_center()
+                                densitypower=1.5, Rmin=1, Rmax= Rmax/Rmin,\
+                                q_out=10, discfraction=Mdisk/sun.mass,\
+                                convert_nbody=self.converter_local).result
+        disk.rotate(30|units.deg, 0|units.deg, 0|units.deg)
         disk.position += sun.position
         disk.velocity += sun.velocity
-
-        # print(sun)
-        # print(disk[0:10])
-        
-        # disk_and_star = Particles()
-        
-            # disk_and_star.add_particle(sun)
-        # disk_and_star.add_particle(disk)
 
         #################################
         # All together
@@ -262,11 +337,7 @@ class Cluster_env_hydro(gym.Env):
 
         cluster.add_particles(disk)
 
-        # if self.settings['Training']['RemovePlanets'] == False:
-            # cluster.add_particles(planets)
-
         return stars, [sun, disk], cluster
-
 
     ## BASIC FUNCTIONS
     def reset(self):
@@ -289,11 +360,13 @@ class Cluster_env_hydro(gym.Env):
 
         # Same time step for the integrators and the bridge
         # self.all_particles, \
-        self.particles_global, self.particles_local, \
-        self.particles_joined = self._initial_conditions_hydro()
+        self.particles_global, \
+        self.particles_local, \
+        self.particles_joined = self._initial_conditions()
+        # self.particles_joined = self._initial_conditions_hydro()
+
         self.particles_joined2 = self.particles_joined.copy()
         
-
         self.grav_global = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
         self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
         self.grav_global.particles.add_particles(self.particles_global)
@@ -302,11 +375,12 @@ class Cluster_env_hydro(gym.Env):
 
         # Bridge creation
         if self.settings['Integration']["bridge"] == 'original':
-            self.grav_bridge = bridge()
+            self.grav_bridge = bridge.Bridge()
         else:
             self.grav_bridge = Modified_Bridge()
 
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,)) # particles without the sun
+        # self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
         self.grav_bridge.add_system(self.grav_global)
 
         # print(self.particles_joined)
@@ -342,10 +416,6 @@ class Cluster_env_hydro(gym.Env):
         self.grav_bridge.timestep = self.actions[0] | self.units_time
         self.check_step = self.settings['Integration']['check_step']
 
-        # Plot trajectory
-        if self.settings['Integration']['plot'] == True:
-            plot_state(self.particles_joined)
-
         # Initialize variables to save simulation information
         if self.settings['Integration']['savestate'] == True:
             steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
@@ -377,7 +447,7 @@ class Cluster_env_hydro(gym.Env):
 
         # Apply action
         # Integrate
-        timestep = self.actions[action]
+        timestep = self.actions[action] 
 
         # start loop for hybrid
         counter_hybrid = 0
@@ -436,7 +506,7 @@ class Cluster_env_hydro(gym.Env):
 
         else:
             t0_step = time.time()
-            self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
+            self.grav_bridge.evolve_model(t, timestep = timestep | units.yr)
             # Get information for the reward
             # info_error = self._get_info(self.particles_joined)
             
@@ -476,8 +546,8 @@ class Cluster_env_hydro(gym.Env):
             self._display_info(info_error, reward, action)
 
         # Plot trajectory
-        if self.settings['Integration']['plot'] == True and terminated == True:
-            plot_state(self.particles_joined)
+        # if self.settings['Integration']['plot'] == True and terminated == True:
+        #     plot_state(self.particles_joined)
 
         info = dict()
         info['TimeLimit.truncated'] = False
@@ -498,7 +568,7 @@ class Cluster_env_hydro(gym.Env):
             self.G = constants.G
             self.units_G = units.m**3 * units.kg**(-1) * units.s**(-2)
             self.units_energy = units.m**2 * units.s**(-2)* units.kg
-            self.units_time = units.Myr
+            self.units_time = units.yr
 
             self.units_t = units.s 
             self.units_l = units.m
@@ -560,7 +630,7 @@ class Cluster_env_hydro(gym.Env):
                 g = Huayno(self.converter)
             else:
                 g = Huayno()
-            g.parameters.timestep_parameter =  tstep
+            g.parameters.timestep =  tstep | units.yr
             # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2 # Softening
         elif integrator_type == 'Gadget2':
             if self.settings['InitialConditions']['units'] == 'si':
@@ -570,20 +640,14 @@ class Cluster_env_hydro(gym.Env):
 
         elif integrator_type == 'Fi':
             if self.settings['InitialConditions']['units'] == 'si':
-                g = Fi(self.converter)
+                g = Fi(self.converter_local)
             else:
                 g = Fi()
-            g.parameters.timestep = 1 | units.yr
+            g.parameters.epsilon_squared = (10|units.au)**2
+            g.parameters.timestep = tstep | units.yr
+
             # g.parameters.timestep_parameter =  tstep
 
-        elif integrator_type == 'Symple': 
-            if self.settings['InitialConditions']['units'] == 'si':
-                g = symple(self.converter, redirection ='none')
-            else:
-                g = symple(redirection ='none')
-            g.initialize_code()
-            # g.parameters.timestep = tstep | self.units_time
-            
         return g 
     
     # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
@@ -674,7 +738,6 @@ class Cluster_env_hydro(gym.Env):
             
             # state[0] = min_distance
             state[0] = pot_nbody
-            # state[1] = particles_m_nbody[self.index_planetarystar]
             state[1] = -np.log10(abs(E))
             # print(state)
 
@@ -773,19 +836,23 @@ class Cluster_env_hydro(gym.Env):
         return state, cons, tcomp
     
     def plot_orbit(self):
-        """
-        plot_orbit: plot orbits of the bodies
-        """
-        state, cons = self.loadstate()
+        path = self.settings['Integration']['savefile'] + self.settings['Integration']['subfolder']
+        plot_state_disk(self.particles_joined, self.state, path)
 
-        n_bodies = np.shape(state)[1]
+    # def plot_orbit(self):
+    #     """
+    #     plot_orbit: plot orbits of the bodies
+    #     """
+    #     state, cons = self.loadstate()
 
-        for i in range(n_bodies):
-            plt.plot(state[:, i, 2], state[:, i, 3], marker= 'o', label = self.names[i])
-        plt.axis('equal')
-        plt.grid()
-        plt.legend()
-        plt.show()
+    #     n_bodies = np.shape(state)[1]
+
+    #     for i in range(n_bodies):
+    #         plt.plot(state[:, i, 2], state[:, i, 3], marker= 'o', label = self.names[i])
+    #     plt.axis('equal')
+    #     plt.grid()
+    #     plt.legend()
+    #     plt.show()
 
 
     def calculate_angular_m(self, particles):

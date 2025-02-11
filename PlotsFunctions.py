@@ -52,6 +52,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         ax.scatter(x[0], y[0], marker = markers[j%len(markers)], s = 20*size_marker,\
                    c = colors[j%len(colors)], \
                     label = "Particle "+ name_planets[j])
+        
         ax.plot(x[1:], y[1:], marker = None, 
                     markersize = size_marker, \
                     linestyle = '-',\
@@ -61,8 +62,8 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
         ax.scatter(x[1:], y[1:], marker = markers[j%len(markers)], s = size_marker, \
                     c = colors[j%len(colors)])        
         
-    if legend_on == True:
-        ax.legend(fontsize = labelsize)
+    # if legend_on == True:
+    #     ax.legend(fontsize = labelsize)
     if axislabel_on == True:
         ax.set_xlabel('x (au)', fontsize = labelsize)
         ax.set_ylabel('y (au)', fontsize = labelsize)
@@ -291,12 +292,14 @@ def calculate_lim_distance_to_one(state, steps):
 
     index_escaped = 0
     
-    last_index = np.where(state[0, :, 8] == 1)[0][0]
-    r0 = state[0:steps, last_index, 2:5]/1.496e11
-    for i in range(0, last_index): # for ecah particle except for the last one
-        r1 = state[0:steps, i, 2:5]/1.496e11
+    star_index = np.where(state[0, :, 8] == 0)[0]
+    planet_index = np.where(state[0, :, 8] == 1)[0][0]
+    r0 = state[0:steps, planet_index, 2:5]/1.496e11
+    for i in range(len(star_index)): # for ecah particle except for the one with particles
+        r1 = state[0:steps, star_index[i], 2:5]/1.496e11
         m = state[0, i, 1]
         Dist.append(np.linalg.norm(r0-r1, axis = 1))
+        print(Dist[i])
         if min(Dist[i]) < 1000:
             index_escaped = 1
 
@@ -304,6 +307,41 @@ def calculate_lim_distance_to_one(state, steps):
     
 
 def plot_distance_to_one(ax, x_axis, state, labelsize = 12, 
+                         legend = True):
+    """
+    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    INPUTS:
+        ax: matplotlib ax to be plotted in 
+        x_axis: time or steps to be plotted in the x axis
+        state: array with the state of each of the particles at every step
+        name_planets: array with the names of the bodies
+        labelsize: size of matplotlib labels
+        steps: steps to be plotted
+    """
+    steps = len(x_axis)
+    Dist = []
+    Labels = []
+    
+    star_index = np.where(state[0, :, 8] == 0)[0]
+    planet_index = np.where(state[0, :, 8] == 1)[0][0]
+    r0 = state[0:steps, planet_index, 2:5]/1.496e11
+    for i in range(len(star_index)): # for ecah particle except for the one with particles
+        r1 = state[0:steps, star_index[i], 2:5]/1.496e11
+        m = state[0, i, 1]
+        Dist.append(np.linalg.norm(r0-r1, axis = 1))
+        Labels.append('Particle %i-%i'%(i+1, planet_index+1))
+        
+        size_marker = np.log(m)/30
+    for i in range(len(Dist)):
+        ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5, 
+                color = colors[(star_index[i])%len(colors)])
+    if legend == True:
+        ax.legend(fontsize =labelsize, framealpha = 0.5)
+    # ax.set_yscale('log')
+
+    return Dist
+
+def plot_distance_to_one_tree(ax, x_axis, state, labelsize = 12, 
                          legend = True):
     """
     plot_planets_distance: plot steps vs pairwise-distance of the bodies
@@ -328,9 +366,18 @@ def plot_distance_to_one(ax, x_axis, state, labelsize = 12,
         Labels.append('Particle %i-%i'%(i+1, last_index+1))
         
         size_marker = np.log(m)/30
+    
+    min_distance = np.ones(steps)*1e16
+    for j in range(steps):
+        for i in range(0, last_index):
+            if Dist[i][j] < min_distance[j]:
+                min_distance[j] = Dist[i][j]
+
     for i in range(len(Dist)):
         ax.plot(x_axis, Dist[i], label = Labels[i], linewidth = 2.5, 
-                color = colors[(i)%len(colors)])
+                color = colors[(i)%len(colors)], alpha = 0.3)
+    ax.plot(x_axis, min_distance, color = colors2[0])
+
     if legend == True:
         ax.legend(fontsize =labelsize, framealpha = 0.5)
     # ax.set_yscale('log')

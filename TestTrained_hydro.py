@@ -15,141 +15,57 @@ import torch
 import torchvision.models as models
 import gym
 
-from env.BridgedCluster_env import Cluster_env
-from TrainRL import train_net
-from Plots_TestTrained import plot_reward, plot_balance, plot_test_reward
+from env_hydro.BridgedCluster_env_hydro import Cluster_env_hydro
 from TestEnvironment import run_trajectory, load_state_files, plot_trajs
 from Plots_TestEnvironment import plot_comparison_end, plot_distance_action, \
     plot_energy_vs_tcomp, plot_energy_vs_tcomp_avg, plot_energy_vs_tcomp_avg_together,\
-    plot_a_vs_e, plot_trajs_tree
+    plot_a_vs_e, plot_trajs_hydro
 
 
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
         'mediumslateblue', 'deepskyblue', 'navy']
 
-
-def load_reward(a, suffix = ''):
-    """
-    load_reward: load rewards from file 
-    INPUTS:
-        a: environment
-    OUTPUTS:
-        score: rewards
-        EnergyE: energy error
-        HuberLoss: huber loss
-    """
-    score = []
-    with open(a.settings['Training']['savemodel'] + suffix + "rewards.txt", "r") as f:
-        # for line in f:
-        for y in f.read().split('\n'):
-            score_r = list()
-            for j in y.split():
-                score_r.append(float(j))
-            score.append(score_r)
-
-    EnergyE = []
-    with open(a.settings['Training']['savemodel'] + suffix + "EnergyError.txt", "r") as f:
-        # for line in f:
-        for y in f.read().split('\n'):
-            Energy_r = list()
-            for j in y.split():
-                Energy_r.append(float(j))
-            EnergyE.append(Energy_r)
-
-    EnergyE_rel = []
-    with open(a.settings['Training']['savemodel'] + suffix + "EnergyError_rel.txt", "r") as f:
-        # for line in f:
-        for y in f.read().split('\n'):
-            Energy_rel_r = list()
-            for j in y.split():
-                Energy_rel_r.append(float(j))
-            EnergyE_rel.append(Energy_rel_r)
-
-
-    tcomp = []
-    with open(a.settings['Training']['savemodel'] + suffix + "Tcomp.txt", "r") as f:
-        # for line in f:
-        for y in f.read().split('\n'):
-            tcomp_r = list()
-            for j in y.split():
-                tcomp_r.append(float(j))
-            tcomp.append(tcomp_r)
-
-    testReward = []
-    with open(a.settings['Training']['savemodel'] + suffix + "TestReward.txt", "r") as f:
-        # for line in f:
-        for y in f.read().split('\n'):
-            testreward_r = list()
-            for j in y.split():
-                testreward_r.append(float(j))
-            testReward.append(testreward_r)
-
-    trainingTime = []
-    with open(a.settings['Training']['savemodel'] + suffix + "TrainingTime.txt", "r") as f:
-        for j in f.read().split():
-            trainingTime.append(float(j))
-
-    HuberLoss = []
-
-    return score, EnergyE, EnergyE_rel, HuberLoss, tcomp, testReward, trainingTime
-
 if __name__ == '__main__':
-    experiment = 3 # number of the experiment to be run
+    experiment = 0 # number of the experiment to be run
 
-    if experiment == 0: # Train
-        env = Cluster_env()
-        env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
-        env.settings['Integration']['subfolder'] = 'currentTraining/'
-        # train_net(env = env, suffix = "currentTraining/")
+    # import env
+    # env = gym.make('Cluster_env_hydro-v0')
 
-        model_path = env.settings['Training']['savemodel'] + 'model_weights173.pth'
-        train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
-
-    elif experiment == 1:
-        # Plot training results
-        env = Cluster_env()
-        reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
-                load_reward(env, suffix = '')
-        # reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
-        #         load_reward(env, suffix = '24_from22_Model173_localTraining/')
-        plot_test_reward(env, testReward, trainingTime)
-        
-    elif experiment == 2:
+    if experiment == 0:
         # 2: use network trained with hyperparameters chosen by hand
-        env = Cluster_env()
-        env.settings['Integration']['subfolder'] = '4_run_RL_base/'
-        env.settings['Training']['RemovePlanets'] = False
+        env = Cluster_env_hydro()
+        env.settings['Integration']['subfolder'] = '11_run_hydro_traj/'
 
-        env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 40
-
-        seed = 3
-        env.settings['InitialConditions']['seed'] = seed
-        env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
-        env.settings['InitialConditions']['n_bodies'] = 9
-
-        model_path_index = '417'
+        model_path_index = '173'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        index_to_plot = [0, 1,3,6, 8, 10]
+        index_to_plot = [0,3, 9]
+        # index_to_plot = [0]
         
         NAMES = []
         TITLES = []
         NAMES.append('_actionRL')
         env.settings['Integration']['suffix'] = NAMES[0]
-        TITLES.append(r'RL-variable $\mu$')
+        TITLES.append(r'RL-173')
         run_trajectory(env, action = 'RL', model_path= model_path)
-        for act in range(env.settings['RL']['number_actions']):
-            NAMES.append('_action_%0.3E_seed%i'%(env.actions[act], seed))
-            env.settings['Integration']['suffix'] = NAMES[act+1]
-            TITLES.append(r'%i: $\mu$ = %.1E'%(act, env.actions[act]))
+        # env.plot_orbit()
+        
+        for act_i, act in enumerate(index_to_plot):
+            # act = act+9
+            NAMES.append('_action_%0.3E'%(env.actions[act]))
+            env.settings['Integration']['suffix'] = NAMES[act_i+1]
+            TITLES.append(r'%i: $\Delta t_B$ = %.1E'%(act, env.actions[act]))
+            print(env.actions[act])
             run_trajectory(env, action = act)
+            # env.plot_orbit()
 
         STATE = []
         CONS = []
         TCOMP = []
         TITLES2 = []
-        for act in index_to_plot:
+        # index_to_plot = [0,10]
+        for act in range(len(NAMES)):
+        # for act in range(4):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)
@@ -159,9 +75,9 @@ if __name__ == '__main__':
 
         save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             'Action_comparison_RL.png'
-        plot_trajs(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=[0,1])
-        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
-            'Action_comparison_RL2.png'
+        plot_trajs_hydro(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=[0,1])
+        # save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
+            # 'Action_comparison_RL2.png'
         # plot_state_diff(env, STATE, CONS, TCOMP, TITLES, save_path)
         # save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
             # 'Action_comparison_RL3.png'
@@ -173,9 +89,10 @@ if __name__ == '__main__':
         env.settings['Training']['RemovePlanets'] = False
 
         env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 100
-        seed = 1
-        hybrid = True
+        env.settings['Integration']['max_steps'] = 40
+
+        seed = 2
+        hybrid = False
         env.settings['InitialConditions']['seed'] = seed
         env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
 
@@ -184,7 +101,6 @@ if __name__ == '__main__':
         index_to_plot = [0,2,5, 7, 9]
         
         Bodies = [5, 9, 15]
-        # Bodies = [9]
         for i in range(len(Bodies)):
             env.settings['InitialConditions']['n_bodies'] = Bodies[i]
             env.settings['Integration']['subfolder'] = '42_runmodel_Nvary/%ibodies/'%Bodies[i]
@@ -232,11 +148,10 @@ if __name__ == '__main__':
             env.settings['Integration']['subfolder'] = '42_runmodel_Nvary/%iseed_%ibodies_'%(seed, Bodies[i])
             save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
                 'Action_comparison_RL.png'
-            plot_trajs(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=traj_index, hybrid = hybrid)
-
+            # plot_trajs(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=traj_index)
             save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
                 'Action_comparison_avse.png'
-            # plot_a_vs_e(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=traj_index)
+            plot_a_vs_e(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=traj_index)
         
     
     
@@ -265,8 +180,7 @@ if __name__ == '__main__':
         index_to_plot = [0,2,5, 9]
         Bodies = [5, 9, 15]
         # model_path_index = ''
-        # model_path_index = '173'
-        model_path_index = '27'
+        model_path_index = '173'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
 
         STATE_list = []
@@ -307,8 +221,8 @@ if __name__ == '__main__':
                     name = '_action_%i_%i'%(act, i)
                     NAMES.append(name)
                     env.settings['Integration']['suffix'] = name
-                    # run_trajectory(env, action = act)
-                TITLES.append(r'$\Delta t_B$ = %.1E'%(env.actions[act]*t_step_param))
+                    # run_trajectory(env, action = act-1)
+                TITLES.append(r'$\mu$ = %.1E'%(env.actions[act]*t_step_param))
 
             STATE = []
             CONS = []
@@ -335,14 +249,13 @@ if __name__ == '__main__':
 
 
     if experiment == 4: # plot in tcomp vs energy together
-        # subfolder = '6_run_many/model173_40steps/'
-        subfolder = '6_run_many/model27/'
+        subfolder = '6_run_many/'
         integrators = ['Ph4', 'Huayno']
         radius_cluster = 0.1
         run_many(subfolder, integrators, radius_cluster)
     
     if experiment == 5: # plot in tcomp vs energy together long term hybrid
-        subfolder = '6_run_many/173_100steps_hybrid/'
+        subfolder = '6_run_many/'
         integrators = ['Ph4', 'Huayno']
         radius_cluster = 0.1
         run_many(subfolder, integrators, radius_cluster, hybrid = True, steps = 100)
@@ -360,70 +273,13 @@ if __name__ == '__main__':
         t_step_param = 1e-1
         run_many(subfolder, integrators, radius_cluster, t_step_param=t_step_param)
 
-    elif experiment == 8: # run BHTree for a large number of particles
-        env = Cluster_env()
-        env.settings['Training']['RemovePlanets'] = False
-
-        env.settings['Integration']['max_error_accepted'] = 1e5
-        env.settings['Integration']['max_steps'] = 100
-        seed = 2
-
-        hybrid = True
-        env.settings['InitialConditions']['seed'] = seed
-        env.settings['InitialConditions']['bodies_in_system'] = 'fixed'
-        Bodies = 1000
-        env.settings['InitialConditions']['n_bodies'] = Bodies
-        env.settings['Integration']['subfolder'] = '5_TreeCode/'
-        env.settings['Integration']['integrator_global'] = 'BHTree'
+    # elif experiment == 8: # plot in tcomp vs energy together density
+    #     subfolder = '10_run_many_density/'
+    #     integrators = ['Ph4', 'Huayno']
+    #     # virial_ratio = [0.1, 0.8]
+    #     radius_cluster = 0.05
+    #     run_many(subfolder, integrators, radius_cluster)
 
 
-        model_path_index = '173'
-        model_path = './Training_Results/model_weights'+model_path_index +'.pth'
-        index_to_plot = [0,2,5, 7, 9]
-        
-        # Bodies = [9]
-        NAMES = []
-        TITLES = []
 
-        # RL
-        NAMES.append('_actionRL_seed%i'%seed)
-        env.settings['Integration']['suffix'] = NAMES[0]
-        TITLES.append(r"RL-"+model_path_index)
-        env.settings['Integration']["hybrid"] = False
-        # run_trajectory(env, action = 'RL', model_path= model_path)
-
-        if hybrid == True:
-        # Hybrid
-            NAMES.append('_actionHRL_seed%i'%seed)
-            env.settings['Integration']['suffix'] = NAMES[1]
-            TITLES.append(r"H-RL-"+model_path_index)
-            env.settings['Integration']["hybrid"] = True
-            # run_trajectory(env, action = 'RL', model_path= model_path)
-            traj_index = 'RLbest'
-        else:
-            traj_index = 'RLbest'
-
-        # Fixed-step
-        # index_to_plot = [0]
-        for a_i, act in enumerate(index_to_plot): # index_toplot includes RL
-            action = act
-            NAMES.append('_action_%0.3E_seed%i'%(env.actions[action], seed))
-            env.settings['Integration']['suffix'] = NAMES[a_i+2]
-            TITLES.append(r'%i: $\Delta t_B$ = %.1E'%(action, env.actions[action]))
-            # run_trajectory(env, action = action)
-
-        STATE = []
-        CONS = []
-        TCOMP = []
-        TITLES2 = []
-        for a_i in range(len(TITLES)):
-            env.settings['Integration']['suffix'] = NAMES[a_i]
-            state, cons, tcomp = load_state_files(env)
-            STATE.append(state)
-            CONS.append(cons)
-            TCOMP.append(tcomp)
-            TITLES2.append(TITLES[a_i])
-
-        save_path = env.settings['Integration']['savefile'] + env.settings['Integration']['subfolder'] +\
-            'Action_comparison_RL_seed%i.png'%seed
-        plot_trajs_tree(env, STATE, CONS, TCOMP, TITLES2, save_path, plot_traj_index=traj_index, hybrid = hybrid)
+    

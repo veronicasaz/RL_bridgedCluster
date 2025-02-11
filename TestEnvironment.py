@@ -59,9 +59,12 @@ def run_trajectory(env, action = 'RL', model_path = None, bridge = True):
         
         # Take steps
         while terminated == False:
-            state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-            action = model(state).max(1)[1].view(1, 1)
-            state, y, terminated, info = env.step(action.item())
+            try:
+                state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+                action = model(state).max(1)[1].view(1, 1)
+                state, y, terminated, info = env.step(action.item())
+            except:
+                env.plot_orbit()
         env.close()
     
     elif action == 'random':
@@ -80,7 +83,10 @@ def run_trajectory(env, action = 'RL', model_path = None, bridge = True):
         env.close_withoutBridge()
     else:
         while terminated == False:
-            x, y, terminated, zz = env.step(action)
+            try:
+                x, y, terminated, zz = env.step(action)
+            except:
+                env.plot_orbit()
             i += 1
         env.close()
 
@@ -106,7 +112,7 @@ def load_state_files(env, namefile = None):
 
 
 if __name__ == '__main__':
-    experiment = 6 # number of the experiment to be run
+    experiment = 7 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
         
@@ -293,7 +299,7 @@ if __name__ == '__main__':
             env.settings['InitialConditions']['seed'] = seeds[i]
             env.settings['Training']["RemovePlanets"]= False
             env.settings['Integration']["max_error_accepted"] = 1e10
-            run_trajectory(env, action = action, bridge = True) 
+            # run_trajectory(env, action = action, bridge = True) 
 
         STATE = []
         CONS = []
@@ -406,67 +412,68 @@ if __name__ == '__main__':
         NAMES = []
         TITLES = []
 
-        bodies_list = [5, 10, 50, 100, 200, 500]
+        bodies_list = [5, 10, 50, 100, 200]
         # bodies_list = [5, 10, 50]
         # bodies_list = [100, 200, 500]
         seeds = [3]
 
         for SED in seeds:
             env.settings['InitialConditions']['seed'] = SED
+            env.settings['InitialConditions']["bodies_in_system"] = "Fixed"
 
             # ph4
             name = '_nobridge_'
             for bodies in bodies_list:
-                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                env.settings['InitialConditions']["n_bodies"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('Direct %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 0, bridge = False) # Action does not affect
+                # run_trajectory(env, action = 0, bridge = False) # Action does not affect
 
             name = '_modbridge_fast_'
             env.settings['Integration']["hybrid"] = False
             for bodies in bodies_list:
-                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                env.settings['InitialConditions']["n_bodies"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 4, bridge = True) 
+                # run_trajectory(env, action = 4, bridge = True) 
 
             
             name = '_modbridge_accurate_'
             env.settings['Integration']["hybrid"] = True
             for bodies in bodies_list:
-                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                env.settings['InitialConditions']["n_bodies"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('H-Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 4, bridge = True) 
+                # run_trajectory(env, action = 4, bridge = True) 
 
             name = '_modbridgeRL_'
             env.settings['Integration']["hybrid"] = False
             model_path_index = '173'
             model_path = './Training_Results/model_weights'+model_path_index +'.pth'
             for bodies in bodies_list:
-                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                env.settings['InitialConditions']["n_bodies"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('RL Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+                # run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
             name = '_modbridgeHRL_'
             env.settings['Integration']["hybrid"] = True
             model_path = './Training_Results/model_weights'+model_path_index +'.pth'
             for bodies in bodies_list:
-                env.settings['InitialConditions']["bodies_in_system"] = bodies
+                env.settings['InitialConditions']["n_bodies"] = bodies
                 namei = str(SED) + name + str(bodies)
                 NAMES.append(namei) 
                 TITLES.append('H-RL Bridge %i'%bodies)
                 env.settings['Integration']['suffix'] = namei
-                run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
+                # run_trajectory(env, action = 'RL', bridge = True, model_path = model_path) # Action does not affect
 
         STATE = []
         CONS = []
