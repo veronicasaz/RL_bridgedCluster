@@ -2,12 +2,9 @@
 TestEnvironment: tests simulation environments
 
 Author: Veronica Saz Ulibarrena
-Last modified: 8-February-2024
+Last modified: 5-March-2025
 """
 import numpy as np
-import json
-import matplotlib.pyplot as plt
-import matplotlib
 import torch
 
 from env.BridgedCluster_env import Cluster_env
@@ -25,18 +22,11 @@ def run_trajectory(env, action = 'RL', model_path = None, bridge = True):
     """
     run_trajectory: Run one initialization with RL or with an integrator
     INPUTS:
-        action: fixed action or 'RL' 
         env: environment to simulate
-        name_suffix: suffix to be added for the file saving
-        steps: number of steps to simulate
-        reward_f: type of reward to use for the simulation and weights for the 3 terms
+        action: fixed action or 'RL' 
         model_path: path to the trained RL algorithm
-        steps_suffix: suffix for the file with the steps taken
-
-    OUTPUTS:
-        reward: reward for each step
+        bridge: True or False 
     """
-    
     if model_path == None:
         model_path = env.settings['Training']['savemodel'] +'model_weights.pth'
         
@@ -90,13 +80,11 @@ def run_trajectory(env, action = 'RL', model_path = None, bridge = True):
             i += 1
         env.close()
 
-
 def load_state_files(env, namefile = None):
     """
     load_state_files: Load run information 
     INPUTS: 
         env: environment of the saved files
-        steps: steps taken
         namefile: suffix for the loading 
     OUTPUTS:
         state: state of the bodies in the system
@@ -110,14 +98,11 @@ def load_state_files(env, namefile = None):
 
     return state, cons, tcomp
 
-
 if __name__ == '__main__':
     experiment = 7 # number of the experiment to be run
             
     if experiment == 0: #test creation of planetary systems
-        
         seed = np.random.randint(10000, size = 1000)
-        # seed = [6496]
         for i in range(len(seed)):
             print(i, seed[i])
             env = Cluster_env()
@@ -142,7 +127,6 @@ if __name__ == '__main__':
             print("Action", env.actions[act+4])
             name = '_action'+str(act) +str(env.settings['Integration']["hybrid"])
             NAMES.append(name)
-            print(name)
             env.settings['Integration']['suffix'] = name
             run_trajectory(env, action = act+2)
 
@@ -152,7 +136,6 @@ if __name__ == '__main__':
             print("Action", env.actions[act])
             name = '_action'+str(act) +str(env.settings['Integration']["hybrid"])
             NAMES.append(name)
-            print(name)
             env.settings['Integration']['suffix'] = name
             run_trajectory(env, action = act+2)
 
@@ -161,7 +144,6 @@ if __name__ == '__main__':
         TCOMP = []
         TITLES = ['No hybrid', "hybrid"]
         for act in range(len(NAMES)):
-        # for act in range(env.settings['RL']['number_actions']):
             env.settings['Integration']['suffix'] = NAMES[act]
             state, cons, tcomp = load_state_files(env)
             STATE.append(state)
@@ -173,7 +155,6 @@ if __name__ == '__main__':
         plot_trajs(env, STATE, CONS, TCOMP, TITLES, save_path)
 
     elif experiment == 2: # run convergence study
-
         for seed in [1, 2, 3, 4]:
             env = Cluster_env()
             env.settings['Integration']['subfolder'] = '1_run_convergence/seed%i/'%seed
@@ -182,7 +163,6 @@ if __name__ == '__main__':
             env.settings['Integration']['max_steps'] = 40
             env.settings['Integration']["max_error_accepted"] = 1e10
             env.settings['Integration']["bridge"] = 'modified'
-
 
             max_actions = 9
             env.settings['RL']['number_actions'] = 5 #limit how many actions we choose
@@ -214,15 +194,9 @@ if __name__ == '__main__':
         plot_convergence(env, STATE, CONS, TCOMP, TITLES, save_path)
         plot_trajs_reward(env, STATE, CONS, TCOMP, TITLES, save_path)
 
-    
     elif experiment == 3: # put together convergence study for different seeds
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_convergence/'
-        # env.settings['InitialConditions']['seed'] = 1
-        # env.settings['Training']['RemovePlanets'] = False
-        # env.settings['Integration']['max_steps'] = 40
-        # env.settings['Integration']["max_error_accepted"] = 1e10
-
 
         max_actions = 9
         env.settings['RL']['number_actions'] = 5 #limit how many actions we choose
@@ -234,9 +208,7 @@ if __name__ == '__main__':
             name = '_action_%0.2E'%(env.actions[act])
             NAMES.append(name)
 
-
         seed_folder = ['seed1/', 'seed2/', 'seed3/', 'seed4/']
-        # seed_folder = ['seed1_2/','seed2_2/']
         STATE_list = []
         CONS_list = []
         TCOMP_list = []
@@ -260,29 +232,10 @@ if __name__ == '__main__':
             TCOMP_list.append(TCOMP)
             TITLES_list.append(TITLES)
 
-        # Add direct integration one
-        # STATE = []
-        # CONS = []
-        # TCOMP = []
-        # TITLES = []
-        # env.settings['Integration']['suffix'] = '_nobridge'
-        # env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
-        # state, cons, tcomp = load_state_files(env)
-        # STATE.append(state)
-        # CONS.append(cons)
-        # TCOMP.append(tcomp)
-        # TITLES.append('Direct integration')
-
-        # STATE_list.append(STATE)
-        # CONS_list.append(CONS)
-        # TCOMP_list.append(TCOMP)
-        # TITLES_list.append(TITLES)
-
         save_path = env.settings['Integration']['savefile'] + '1_run_convergence/'+\
             'Convergence_comparison'
         plot_convergence_togetherseeds(env, STATE_list, CONS_list, TCOMP_list, TITLES_list, save_path)
         
-
     elif experiment == 4: # test different initializations
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '2_run_initializations/'
@@ -347,7 +300,6 @@ if __name__ == '__main__':
             'Reward_comparison.png'
         plot_reward_comparison(env, [STATE[action]], [CONS[action]], [TCOMP[action]], [NAMES[action]], save_path)
 
-
     elif experiment == 6: # create baseline without bridge
         env = Cluster_env()
         env.settings['Integration']['subfolder'] = '1_run_actions_woBridge/'
@@ -405,16 +357,10 @@ if __name__ == '__main__':
         env.settings['Integration']['max_steps'] = 40
         env.settings['Integration']["max_error_accepted"] = 1e10
 
-        # try this for more planets
-        # env.settings['InitialConditions']["disk_radius"] = [3, 50]
-        # env.settings['InitialConditions']["mass_disk"] = 1e-4
-
         NAMES = []
         TITLES = []
 
         bodies_list = [5, 10, 50, 100, 200]
-        # bodies_list = [5, 10, 50]
-        # bodies_list = [100, 200, 500]
         seeds = [3]
 
         for SED in seeds:

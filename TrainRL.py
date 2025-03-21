@@ -2,7 +2,7 @@
 TestGym: Training of the reinforcement learning algorithm
 
 Author: Veronica Saz Ulibarrena
-Last modified: 6-February-2024
+Last modified: 6-July-2025
 
 Based on:
 https://www.learndatasci.com/tutorials/reinforcement-q-learning-scratch-python-openai-gym/https://www.gymlibrary.dev/content/environment_creation/
@@ -10,7 +10,7 @@ https://www.gymlibrary.dev/content/environment_creation/
 https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 https://towardsdatascience.com/reinforcement-learning-explained-visually-part-5-deep-q-networks-step-by-step-5a5317197f4b
 """
-from IPython.display import clear_output
+# from IPython.display import clear_output
 
 import gym
 import torch
@@ -22,18 +22,19 @@ import random
 import time
 import math
 
-import matplotlib.pyplot as plt
 import matplotlib
 import torch.optim as optim
 
-
 from collections import namedtuple, deque
-from itertools import count
 
 
 def train_net(env = None, suffix = '', model_path_pretrained = False):
     """"
-    pretrained: False or model path
+    train_net: training of the model
+    INPUTS:
+        env: environment class. If None, loaded later. 
+        suffix: file addition
+        model_path_pretrained: False or model path for starting weights
     """
     # Environment
     if env == None:
@@ -49,8 +50,6 @@ def train_net(env = None, suffix = '', model_path_pretrained = False):
     if is_ipython:
         from IPython import display
 
-    # settings = load_json("./settings_symple.json")
-    
     # TRAINING settings
     BATCH_SIZE = env.settings['Training']['batch_size'] # number of transitions sampled from the replay buffer
     GAMMA = env.settings['Training']['gamma'] # discount factor
@@ -119,17 +118,24 @@ def train_net(env = None, suffix = '', model_path_pretrained = False):
 
         # Do first step without updating the networks and with the best step
         action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, 0)
-        observation, reward_p, terminated, info = env.step(action.item())
+        try:
+            observation, reward_p, terminated, info = env.step(action.item())
+        except:
+            print("error")
 
         terminated = False
         while terminated == False:
             # Take a step
             action, steps_done = select_action(state, policy_net, [EPS_START, EPS_END, EPS_DECAY], env, device, steps_done)
-            observation, reward_p, terminated, info = env.step(action.item())
-            save_reward_list.append(reward_p)
-            save_EnergyE_list.append(info['Energy_error'])
-            save_EnergyE_rel_list.append(info['Energy_error_rel'])
-            save_tcomp_list.append(info['tcomp'])
+            try:
+                observation, reward_p, terminated, info = env.step(action.item())
+                save_reward_list.append(reward_p)
+                save_EnergyE_list.append(info['Energy_error'])
+                save_EnergyE_rel_list.append(info['Energy_error_rel'])
+                save_tcomp_list.append(info['tcomp'])
+            except:
+                print("error")
+                terminated = True
             
             reward = torch.tensor([reward_p], device=device)
             if terminated:
@@ -162,11 +168,7 @@ def train_net(env = None, suffix = '', model_path_pretrained = False):
             target_net.load_state_dict(target_net_state_dict)
         env.close()
 
-        # if episode_number %10 == 0:
         test_reward_list = test_network(env, policy_net)
-        # else:
-        #     test_reward_list = np.zeros((env.settings['Training']['testdata_size'], 4)).flatten()
-        # test_reward_list = save_reward_list #TODO eliminate
 
         save_reward.append(save_reward_list)
         save_EnergyE.append(save_EnergyE_list)
@@ -279,7 +281,8 @@ class DQN(nn.Module):
         INPUTS:
             n_observations: number of observations to use as input
             n_actions: number of actions to use as output size
-            settings: dictionary with specific network settings
+            neurons: number of neurons to use
+            layers: layers to use
         """
         super(DQN, self).__init__()
         self.neurons = int(neurons)
@@ -288,10 +291,7 @@ class DQN(nn.Module):
         self.layer2 = nn.Linear(self.neurons, self.neurons)
         self.layer3 = nn.Linear(self.neurons, n_actions)
 
-        if layers == None:
-            self.hidden_layers = self.settings['Training']['hidden_layers']
-        else:
-            self.hidden_layers = int(layers)
+        self.hidden_layers = int(layers)
 
 
     # Called with either one element to determine next action, or a batch
@@ -353,7 +353,7 @@ def optimize_model(policy_net, target_net, memory, \
         BATCH_SIZE: batch size
         optimizer: optimization algorithm
     OUTPUTS:
-        loss: loss
+        loss: loss value
     """
     if len(memory) < BATCH_SIZE:
         return
@@ -426,9 +426,13 @@ def test_network(env, model): #TODO: adappt with env
         while terminated == False: #steps 
             steps += 1
             # state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-            state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-            action = model(state).max(1)[1].view(1, 1)
-            state, reward, terminated, info = env.step(action.item())
+            try:
+                state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+                action = model(state).max(1)[1].view(1, 1)
+                state, reward, terminated, info = env.step(action.item())
+            except:
+                print("error")
+                terminated = True
 
             tcomp += info['tcomp']
             rew += reward

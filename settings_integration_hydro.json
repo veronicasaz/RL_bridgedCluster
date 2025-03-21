@@ -1,0 +1,77 @@
+{
+    "InitialConditions":
+    {
+       "units": "si",
+       "seed": 2345679,
+       "n_bodies": 3, 
+       "bodies_in_system": "fixed",
+       "ranges_mass": [1, 100],
+       "radius_cluster": 0.1,
+ 	"virial_ratio": 0.5,
+	"Ndisk": 50, 
+	"mass_disk": 0.01,
+	"disk_radius": [10, 1000]
+    },
+    "Integration":
+    { 
+        "savefile": "./Cluster_Testing_results/",
+        "subfolder": "",
+        "suffix": "",
+	"savestate": true,
+        "max_steps": 200,
+        "check_step": 100, 
+        "hydro": false,
+        "integrator_global": "Huayno",
+        "t_step_global": 10,
+        "integrator_local_hydro": "Fi",
+        "integrator_local": "Huayno",
+        "t_step_local": 3,
+        "max_error_accepted": 1e5,
+        "plot": false,
+        "bridge": "original",
+        "hybrid": false
+    },
+    "RL":
+    {
+        "state": "potential",
+        "state_options_info": ["norm", "cart", "dist", "potential"],
+        "action": "range", 
+        "number_actions": 10,
+	"range_action": [10, 100],
+	"t_step_param": 1.0,
+	"reward_f": 1,
+        "weights": [50.0, 1.0, 1.0]
+     },
+
+    "Training":
+    {
+    	"RemovePlanets": false,
+    	"savemodel": "./Training_Results/",
+    	"subfolder": "",
+    	"suffix":"",
+    	"display": true,
+        "max_episodes": 200,
+        "testdata_size": 5,
+        "hidden_layers": 5,
+        "neurons": 200,
+        "lr": 1e-4,
+        "batch_size": 50,
+        "gamma": 0.99,
+        "eps_start": 0.9,
+        "eps_end": 0.05,
+        "eps_decay": 100,
+        "tau": 0.005
+    },
+    "Hyperparam_optim":
+    {
+    "max_iter": 500,
+    "individuals": 8,
+    "bnds":{
+    	    "epochs": [10, 1000],
+            "layers": [2, 6],
+            "neurons": [10, 125], 
+            "lr": [1e-5, 1e-2]
+              }
+    
+    }
+}

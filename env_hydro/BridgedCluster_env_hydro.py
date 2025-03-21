@@ -2,7 +2,7 @@
 Bridged2Body_env: environment for integration of a 2 body problem using bridge
 
 Author: Veronica Saz Ulibarrena
-Last modified: 8-February-2024
+Last modified: 5-March-2025
 
 Based on https://www.gymlibrary.dev/content/environment_creation/
 pip install -e ENVS needed to create a package
@@ -12,32 +12,21 @@ import gym
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from setuptools import setup
 import json
 import random
 
-import threading
-
-from pyDOE import lhs
-
 from amuse.units import units, constants, nbody_system
-from amuse.units.quantities import sign
 from amuse.community.hermite.interface import Hermite
 from amuse.community.ph4.interface import ph4
-from amuse.community.symple.interface import symple
 from amuse.community.huayno.interface import Huayno
+from amuse.community.fi.interface import Fi
 from amuse.community.gadget2.interface import Gadget2
-# from amuse.community.fi.interface import Fi
 
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
-# from amuse.lab import Particles, new_powerlaw_mass_distribution
+from amuse.lab import Particles, new_powerlaw_mass_distribution
 from amuse.lab import *
-# from amuse.ext.bridge import bridge, kick_system
 from amuse.couple import bridge
 from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
-from amuse.ic import make_planets_oligarch
-
-from amuse.units import quantities
 from amuse.ext.protodisk import ProtoPlanetaryDisk
 
 from scipy.interpolate import griddata
@@ -46,9 +35,17 @@ from scipy.stats import gaussian_kde
 from env.InclusiveBridgeSep import Modified_Bridge
 
 def renormalize(arr):
+    """renormalize: normalize for contour plot"""
     return (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
 
 def plot_contours(x, y, cmap):
+    """
+    plot_contours: plot contour of hydro
+    INPUTS:
+        x: x coords
+        y: y coords
+        cmap: colormap
+    """
     xmin = -3000
     ymin = -4000
     xmax = 3000
@@ -62,17 +59,20 @@ def plot_contours(x, y, cmap):
     xy = np.vstack([x,y])
     z = gaussian_kde(xy)(xy)
     z = renormalize(z)
-    #print(z)
-    #z = z/np.min(z)
 
     # Interpolate Z values on the grid
-    #Z = griddata((x, y), z, (X, Y), method='linear', fill_value=0)
     Z = griddata((x, y), z, (X, Y), method='nearest', fill_value=0)
-    # print(np.min(Z), np.max(Z))
 
     contour = plt.contour(X, Y, Z, levels=[0.003, 0.01, 0.03, 0.1, 0.3, 0.9], cmap=cmap)
 
 def plot_heatmap(allx, ally, cmap):
+    """
+    plot_heatmap: plot heatmap
+    INPUTS: 
+        allx: all x coordinates
+        ally: all y coordinates
+        cmap: colormap
+    """
     xmin = -3000
     ymin = -4000
     xmax = 3000
@@ -92,6 +92,13 @@ def plot_heatmap(allx, ally, cmap):
                cmap=cmap)
     
 def plot_state_disk(bodies_final, states, path):
+    """
+    plot_state_disk: plot disk 
+    INPUTS:
+        bodies_final
+        states
+        path
+    """
     starwdisk = bodies_final[0]
     ring = bodies_final[3:]
     stars = bodies_final[0:3]
@@ -127,8 +134,6 @@ def plot_state_disk(bodies_final, states, path):
     plt.scatter(stars.x.value_in(units.au), stars.y.value_in(units.au), s=100, c='k')
     plt.scatter(starwdisk.x.value_in(units.au), starwdisk.y.value_in(units.au), s=100, c='r')
 
-    # x = np.array(x).T
-    # y = np.array(y).T
     bodies = len(states[0, :3,0 ])
     for xi in range(bodies):
         if xi == 0: 
@@ -137,51 +142,36 @@ def plot_state_disk(bodies_final, states, path):
             color = 'black'
         x = states[1:, xi, 2] /1.496e11
         y = states[1:, xi, 3] /1.496e11
-        # print(x, y)
         plt.plot(x, y, c=color)
     plt.savefig(path+'trajectory.png')
     # plt.show()
 
-
-
 def load_json(filepath):
     """
     load_json: load json file as dictionary
+    INPUTS: 
+        filepath: path to open
+    OUTPUTS:
+        data: json data as dict
     """
     with open(filepath) as jsonFile:
         data = json.load(jsonFile)
     jsonFile.close()
     return data
 
-def get_orbital_elements_of_planetary_system(star, planets):
-    total_masses = planets.mass + star.mass
-    rel_pos = planets.position-star.position
-    rel_vel = planets.velocity-star.velocity
-    sma, ecc, true_anomaly,\
-        inc, long_asc_node, arg_per_mat =\
-            get_orbital_elements_from_arrays(rel_pos,
-                                             rel_vel,
-                                             total_masses,
-                                             G=constants.G)
-    planets.semimajor_axis = sma
-    planets.eccentricity = ecc
-    planets.inclination = inc
-
-    planets = planets[np.isnan(planets.eccentricity)]
-    planets.eccentricity = 10
-    planets.semimajor_axis = 1.e+10 | units.au
-
-
-
 class Cluster_env_hydro(gym.Env):
     def __init__(self, render_mode = None):
+        """
+        Cluster_env_hydro: cluster of stars with a disk around one star
+        """
         self.settings = load_json("./settings_integration_hydro.json")
         self.n_bodies = self.settings['InitialConditions']['n_bodies']
-        
         self._initialize_RL()
 
     def _initialize_RL(self):
-
+        """
+        _initialize_RL: initialize RL algorithm
+        """
         # STATE
         if self.settings["RL"]["state"] == 'cart':
             self.observation_space_n = 4*self.n_bodies+1
@@ -194,7 +184,6 @@ class Cluster_env_hydro(gym.Env):
         self.observation_space = gym.spaces.Box(low=np.array([-np.inf]*self.observation_space_n), \
                                                 high=np.array([np.inf]*self.observation_space_n), \
                                                 dtype=np.float64)
-            
         # ACTION
         # From a range of paramters
         if self.settings['RL']['action'] == 'range':
@@ -204,9 +193,6 @@ class Cluster_env_hydro(gym.Env):
             self.actions = np.logspace(np.log10(low), np.log10(high), \
                                        num = n_actions, base = 10,
                                        endpoint = True)
-            # self.actions = np.linspace(low, high, \
-            #                            num = n_actions, endpoint = True)
-            print(self.actions)
             
             self.actions *= self.settings['RL']['t_step_param']
         
@@ -216,6 +202,14 @@ class Cluster_env_hydro(gym.Env):
         self.W = self.settings['RL']['weights']
         
     def _initial_conditions(self):
+        """
+        _initial_conditions_bridge: select initial conditions for the astrophysics system
+        OUTPUTS:
+            stars: particle set with the group of stars.
+                Depending on the type of bridge, the common star is included or not
+            star, disk: particle set for the star and the disk 
+            disk: all bodies in the cluster and planetary system
+        """
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
         #################################
@@ -229,8 +223,6 @@ class Cluster_env_hydro(gym.Env):
                                             self.settings['InitialConditions']['ranges_mass'][1] |units.MSun, -2.35)
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
-        #stars=new_plummer_model(N,convert_nbody=converter)
-        print(nbodies)
         stars = new_fractal_cluster_model(nbodies,
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
@@ -244,7 +236,6 @@ class Cluster_env_hydro(gym.Env):
 
         #################################
         # Star to get planets
-        # sun = stars.random_sample(1)[0]
         sun = stars[-1]
         sun.name = "Sun"
 
@@ -267,7 +258,7 @@ class Cluster_env_hydro(gym.Env):
         cluster = Particles()
         cluster.add_particles(stars)
         self.n_stars = len(cluster)
-        self.index_planetarystar = self.n_stars-1
+        self.index_planetarystar = 0
         
         if self.settings['Integration']["bridge"] == 'original':
             stars -= sun
@@ -280,6 +271,14 @@ class Cluster_env_hydro(gym.Env):
         return stars, [sun, disk], cluster
     
     def _initial_conditions_hydro(self):
+        """
+        _initial_conditions_hydro: select initial conditions for the astrophysics system
+        OUTPUTS:
+            stars: particle set with the group of stars.
+                Depending on the type of bridge, the common star is included or not
+            star, disk: particle set for the star and the disk 
+            disk: all bodies in the cluster and planetary system
+        """
         random.seed(self.settings['InitialConditions']['seed'])
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
@@ -290,19 +289,14 @@ class Cluster_env_hydro(gym.Env):
             nbodies = self.settings['InitialConditions']['n_bodies']
             
         masses = 0.5|units.MSun
-        Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
-        # self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
         self.converter = nbody_system.nbody_to_si(1|units.MSun, 0.01|units.pc)
-        #stars=new_plummer_model(N,convert_nbody=converter)
 
         stars = new_fractal_cluster_model(N = nbodies, 
                                         fractal_dimension=1.6,
                                         virial_ratio = self.settings['InitialConditions']['virial_ratio'],
                                         convert_nbody=self.converter,
                                         random_seed = self.settings['InitialConditions']['seed'])
-
         stars.name = "star"
-        # stars.type = "star"
         stars.mass = masses
 
         #################################
@@ -313,7 +307,6 @@ class Cluster_env_hydro(gym.Env):
 
         #################################
         # Hydro system
-    
         Rmin = self.settings['InitialConditions']['disk_radius'][0] | units.au
         Rmax = self.settings['InitialConditions']['disk_radius'][1] | units.au
         Mdisk = self.settings['InitialConditions']['mass_disk']* sun.mass
@@ -331,7 +324,7 @@ class Cluster_env_hydro(gym.Env):
         cluster = Particles()
         cluster.add_particles(stars)
         self.n_stars = len(cluster)
-        self.index_planetarystar = self.n_stars-1
+        self.index_planetarystar = 0
         if self.settings['Integration']["bridge"] == 'original':
             stars -= sun
 
@@ -343,11 +336,6 @@ class Cluster_env_hydro(gym.Env):
     def reset(self):
         """
         reset: reset the simulation 
-        INPUTS:
-            seed: choose the random seed
-            steps: simulation steps to be taken
-            typereward: type or reward to be applied to the problem
-            save_state: save state (True or False)
         OUTPUTS:
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
@@ -359,19 +347,34 @@ class Cluster_env_hydro(gym.Env):
         self.units()
 
         # Same time step for the integrators and the bridge
-        # self.all_particles, \
         self.particles_global, \
         self.particles_local, \
-        self.particles_joined = self._initial_conditions()
-        # self.particles_joined = self._initial_conditions_hydro()
+        self.particles_joined = self._initial_conditions_hydro()
 
         self.particles_joined2 = self.particles_joined.copy()
         
         self.grav_global = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
-        self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
         self.grav_global.particles.add_particles(self.particles_global)
-        self.grav_local.dm_particles.add_particle(self.particles_local[0]) # add central star
-        self.grav_local.gas_particles.add_particles(self.particles_local[1]) # add disk
+        
+        if self.settings["Integration"]['hydro'] == True:
+            self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local_hydro'])
+
+            self.grav_local.dm_particles.add_particle(self.particles_local[0]) # add central star
+            self.grav_local.gas_particles.add_particles(self.particles_local[1]) # add disk
+            
+            self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
+                        self.grav_local.gas_particles.new_channel_to(self.particles_joined),\
+                        self.grav_local.dm_particles.new_channel_to(self.particles_joined)
+                        ]
+        else:
+            self.grav_local = self._initialize_integrator(self.settings ["Integration"]['t_step_local'], self.settings["Integration"]['integrator_local'])
+
+            self.grav_local.particles.add_particle(self.particles_local[0])
+            self.grav_local.particles.add_particles(self.particles_local[1]) # add disk
+
+            self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
+                        self.grav_local.particles.new_channel_to(self.particles_joined)
+                        ]
 
         # Bridge creation
         if self.settings['Integration']["bridge"] == 'original':
@@ -380,28 +383,16 @@ class Cluster_env_hydro(gym.Env):
             self.grav_bridge = Modified_Bridge()
 
         self.grav_bridge.add_system(self.grav_local, (self.grav_global,)) # particles without the sun
-        # self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
-        self.grav_bridge.add_system(self.grav_global)
+        self.grav_bridge.add_system(self.grav_global, (self.grav_local,))
 
-        # print(self.particles_joined)
-        self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
-                        self.grav_local.gas_particles.new_channel_to(self.particles_joined),\
-                        self.grav_local.dm_particles.new_channel_to(self.particles_joined)
-                        ]
-        # self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
-        #                 self.grav_local.particles.new_channel_to(self.particles_joined)
-        #                 ]
-        
         self.channel2 = [self.grav_global.particles.new_channel_to(self.particles_joined2),\
                          self.grav_local.particles.new_channel_to(self.particles_joined2)
-                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
                         ]
         
         self.channel_inverse = [self.particles_joined.new_channel_to(self.grav_global.particles),\
                                 self.particles_joined.new_channel_to(self.grav_local.particles)
                         ]
 
-        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
@@ -457,7 +448,6 @@ class Cluster_env_hydro(gym.Env):
             counter_max = 4
             error_tol = 0.3
             action_i = action
-            # print(self.grav_local.particles)
             while delta_e_good == False and counter_hybrid < counter_max:
 
                 delta_t0 = self.grav_bridge.time
@@ -476,7 +466,6 @@ class Cluster_env_hydro(gym.Env):
                 
                 if error >error_tol and\
                     counter_hybrid < counter_max-1: #half an order of magnitude jump
-                    # self.grav_bridge.time -= delta_t # redo time
                     if action_i == 0:
                         timestep = timestep/2       
                     else:
@@ -487,7 +476,6 @@ class Cluster_env_hydro(gym.Env):
                         self.channel_inverse[chan].copy()
                     counter_hybrid += 1
 
-                    # print(self.grav_global.particles[0])
                 elif error> error_tol and counter_hybrid >= counter_max-1: # run no matter what
                     t+= self.check_step | self.units_time
                     if action_i == 0:
@@ -495,7 +483,6 @@ class Cluster_env_hydro(gym.Env):
                     else:
                         action_i -= 1
                         timestep = self.actions[action_i]
-                    # self.grav_bridge.time -= delta_t # redo time
                     for chan in range(len(self.channel_inverse)): #redo positions of particles
                         self.channel_inverse[chan].copy()
                     self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)                    
@@ -508,7 +495,6 @@ class Cluster_env_hydro(gym.Env):
             t0_step = time.time()
             self.grav_bridge.evolve_model(t, timestep = timestep | units.yr)
             # Get information for the reward
-            # info_error = self._get_info(self.particles_joined)
             
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
@@ -532,11 +518,9 @@ class Cluster_env_hydro(gym.Env):
                             [info_error[0][2], info_error[1]],\
                             T, reward, counter_hybrid) # save initial state
             
-        
         # finish experiment if max number of iterations is reached
         if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
-            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -544,10 +528,6 @@ class Cluster_env_hydro(gym.Env):
         # Display information at each step
         if self.settings['Training']['display'] == True:
             self._display_info(info_error, reward, action)
-
-        # Plot trajectory
-        # if self.settings['Integration']['plot'] == True and terminated == True:
-        #     plot_state(self.particles_joined)
 
         info = dict()
         info['TimeLimit.truncated'] = False
@@ -558,11 +538,17 @@ class Cluster_env_hydro(gym.Env):
         return state, reward, terminated, info
     
     def close(self):
+        """
+        close: close integrators
+        """
         self.grav_global.stop()
         self.grav_local.stop()
 
     ## ADDITIONAL FUNCTIONS NEEDED
     def units(self):
+        """
+        units: choose standard units
+        """
         # Choose set of units for the problem
         if self.settings['InitialConditions']['units'] == 'si':
             self.G = constants.G
@@ -606,6 +592,8 @@ class Cluster_env_hydro(gym.Env):
             - Ph4: action is the time-step parameter
             - Huayno: action is the time-step parameter
             - Symple: action is the time-step size
+            - Gadget2: for hydro codes
+            - Fi: for hydro codes
         OUTPUTS:
             g: integrator
         """
@@ -645,9 +633,7 @@ class Cluster_env_hydro(gym.Env):
                 g = Fi()
             g.parameters.epsilon_squared = (10|units.au)**2
             g.parameters.timestep = tstep | units.yr
-
             # g.parameters.timestep_parameter =  tstep
-
         return g 
     
     # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
@@ -667,21 +653,12 @@ class Cluster_env_hydro(gym.Env):
         else:
             Delta_E_rel = (E_total - self.E_0_total)/self.E_0_total
             Delta_E_prev_rel = (self.E_total_prev - self.E_0_total)/self.E_0_total
-            # Delta_E_rel = E_total
-            # print("Errorrs, ",E_total/self.E_0_total, self.E_total_prev/self.E_0_total)
             if save_step == True:
                 self.E_total_prev = E_total
-            # Delta_E_bridge = Delta_E_total - energy_loss
             Delta_E_total = (E_total - self.E_0_total)/self.E_0_total
             Delta_E_rel_firststep = (E_total - self.E_1_total)/self.E_1_total
-            # Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
-            # Delta_L = (L - self.L_0) / self.L_0
-            # return Delta_E_bridge/self.E_0_total, \
-            # return Delta_E_bridge/self.E_0_total, \
-            #       Delta_E_total/self.E_0_total
             return [Delta_E_rel, Delta_E_prev_rel, Delta_E_rel_firststep], \
                   Delta_E_total\
-                    
 
     def _get_state(self, particles, E):  # TODO: change to include all particles?
         """
@@ -690,7 +667,10 @@ class Cluster_env_hydro(gym.Env):
             - norm: norm of the positions and velocities of each body and the masses
             - cart: 2D cartesian coordinates of the position and angular momentum plus the energy error
             - dis: distance between particles in position and momentum space plus the energy error
-
+            - potential: potential at the position of the particle and energy error
+        INPUTS: 
+            particles: particle set with all bodies
+            E: energy error
         OUTPUTS: 
             state: state array to be given to the reinforcement learning algorithm
         """
@@ -736,10 +716,8 @@ class Cluster_env_hydro(gym.Env):
             pot = particles[self.index_planetarystar].potential()
             pot_nbody = self.converter.to_generic(pot).value_in(nbody_system.length**2/nbody_system.time**2)
             
-            # state[0] = min_distance
             state[0] = pot_nbody
             state[1] = -np.log10(abs(E))
-            # print(state)
 
         return state
     
@@ -790,7 +768,9 @@ class Cluster_env_hydro(gym.Env):
             step: simulation step
             particles: particles set
             E: energy error
-            L: angular momentum
+            T: computation time
+            R: reward
+            hybrid_n: number of iterations of the hybrid method
         """
         self.state[step, :, 0] = action
         self.state[step, :, 1] = particles.mass.value_in(self.units_m)
@@ -836,24 +816,11 @@ class Cluster_env_hydro(gym.Env):
         return state, cons, tcomp
     
     def plot_orbit(self):
+        """
+        plot_orbit: plot orbits of the bodies
+        """
         path = self.settings['Integration']['savefile'] + self.settings['Integration']['subfolder']
         plot_state_disk(self.particles_joined, self.state, path)
-
-    # def plot_orbit(self):
-    #     """
-    #     plot_orbit: plot orbits of the bodies
-    #     """
-    #     state, cons = self.loadstate()
-
-    #     n_bodies = np.shape(state)[1]
-
-    #     for i in range(n_bodies):
-    #         plt.plot(state[:, i, 2], state[:, i, 3], marker= 'o', label = self.names[i])
-    #     plt.axis('equal')
-    #     plt.grid()
-    #     plt.legend()
-    #     plt.show()
-
 
     def calculate_angular_m(self, particles):
         """
@@ -874,12 +841,7 @@ class Cluster_env_hydro(gym.Env):
 
     def reset_withoutBridge(self):
         """
-        reset: reset the simulation 
-        INPUTS:
-            seed: choose the random seed
-            steps: simulation steps to be taken
-            typereward: type or reward to be applied to the problem
-            save_state: save state (True or False)
+        reset_ithoutBridge: reset the simulation for a case with direct integration
         OUTPUTS:
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
@@ -891,17 +853,13 @@ class Cluster_env_hydro(gym.Env):
         self.units()
 
         # Same time step for the integrators and the bridge
-        # self.all_particles, \
         self.particles_global, self.particles_local, \
         self.particles_joined = self._initial_conditions_bridge()
         
-        # TODO: tstep not implemented for now
         self.grav = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
         self.grav.particles.add_particles(self.particles_joined)
 
         self.channel = self.grav.particles.new_channel_to(self.particles_joined)
-
-        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
@@ -915,10 +873,6 @@ class Cluster_env_hydro(gym.Env):
         # Initialize time
         self.check_step = self.settings['Integration']['check_step']
 
-        # Plot trajectory
-        if self.settings['Integration']['plot'] == True:
-            plot_state(self.particles_joined)
-
         # Initialize variables to save simulation information
         if self.settings['Integration']['savestate'] == True:
             steps = self.settings['Integration']['max_steps'] + 1 # +1 to account for step 0
@@ -929,7 +883,6 @@ class Cluster_env_hydro(gym.Env):
                              0.0, 0.0,0 ) # save initial state
 
         self.info_prev = [0.0, 0.0]
-        
         self.first_step = True
             
         return state_RL, self.info_prev
@@ -948,11 +901,9 @@ class Cluster_env_hydro(gym.Env):
         self.iteration += 1
         t0 = self.t_cumul 
         self.t_cumul += self.check_step # add the previous simulation time
-        # self.t_cumul += self.actions[action] # add the previous simulation time
         t = (self.t_cumul) | self.units_time
 
         # Apply action
-        # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
         t0_step = time.time()
         self.grav.evolve_model(t)
@@ -960,7 +911,6 @@ class Cluster_env_hydro(gym.Env):
         T = time.time() - t0_step
             
         # Get information for the reward
-        # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
         if self.first_step == True:
             self.E_1_total = \
             self._get_info(self.particles_joined, initial = True)
@@ -978,7 +928,6 @@ class Cluster_env_hydro(gym.Env):
         # finish experiment if max number of iterations is reached
         if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
-            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -986,10 +935,6 @@ class Cluster_env_hydro(gym.Env):
         # Display information at each step
         if self.settings['Training']['display'] == True:
             self._display_info(info_error, reward, action)
-
-        # Plot trajectory
-        if self.settings['Integration']['plot'] == True and terminated == True:
-            plot_state(self.particles_joined)
 
         info = dict()
         info['TimeLimit.truncated'] = False
@@ -1000,5 +945,8 @@ class Cluster_env_hydro(gym.Env):
         return state, reward, terminated, info
     
     def close_withoutBridge(self):
+        """
+        close_withoutBridge: close environment
+        """
         self.grav.stop()
 

@@ -2,7 +2,7 @@
 Bridged2Body_env: environment for integration of a 2 body problem using bridge
 
 Author: Veronica Saz Ulibarrena
-Last modified: 8-February-2024
+Last modified: 5-March-2025
 
 Based on https://www.gymlibrary.dev/content/environment_creation/
 pip install -e ENVS needed to create a package
@@ -12,15 +12,9 @@ import gym
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from setuptools import setup
 import json
 
-import threading
-
-from pyDOE import lhs
-
 from amuse.units import units, constants, nbody_system
-from amuse.units.quantities import sign
 from amuse.community.hermite.interface import Hermite
 from amuse.community.ph4.interface import ph4
 from amuse.community.symple.interface import symple
@@ -28,14 +22,18 @@ from amuse.community.huayno.interface import Huayno
 from amuse.community.bhtree.interface import BHTree
 from amuse.community.fractalcluster.interface import new_fractal_cluster_model
 from amuse.lab import Particles, new_powerlaw_mass_distribution
-from amuse.ext.bridge import bridge, kick_system
+from amuse.ext.bridge import bridge
 from amuse.ext.orbital_elements import get_orbital_elements_from_arrays
 from amuse.ic import make_planets_oligarch
 
-from amuse.units import quantities
 from env.InclusiveBridgeSep import Modified_Bridge
 
 def plot_state(bodies):
+    """
+    plot_state: plot bodies at a given time
+    INPUTS:
+        bodies: particle set with the bodies
+    """
     v = (bodies.vx**2 + bodies.vy**2 + bodies.vz**2).sqrt()
     plt.scatter(bodies.x.value_in(units.au),\
                 bodies.y.value_in(units.au), \
@@ -47,6 +45,10 @@ def plot_state(bodies):
 def load_json(filepath):
     """
     load_json: load json file as dictionary
+    INPUTS: 
+        filepath: path to open
+    OUTPUTS:
+        data: json data as dict
     """
     with open(filepath) as jsonFile:
         data = json.load(jsonFile)
@@ -54,6 +56,12 @@ def load_json(filepath):
     return data
 
 def get_orbital_elements_of_planetary_system(star, planets):
+    """
+    get_orbital_elements_of_planetary_system (unused):  get orbital elemetns from positions
+    INPUTS: 
+        star: central particle
+        planets: orbiting particle set
+    """
     total_masses = planets.mass + star.mass
     rel_pos = planets.position-star.position
     rel_vel = planets.velocity-star.velocity
@@ -72,17 +80,19 @@ def get_orbital_elements_of_planetary_system(star, planets):
     planets.semimajor_axis = 1.e+10 | units.au
 
 
-
 class Cluster_env(gym.Env):
     def __init__(self, render_mode = None):
+        """
+        Cluster_env: cluster of stars with a planetary system orbiting 
+        """
         self.settings = load_json("./settings_integration_Cluster.json")
         self.n_bodies = self.settings['InitialConditions']['n_bodies']
-
-        
         self._initialize_RL()
 
     def _initialize_RL(self):
-
+        """
+        _initialize_RL: initialize RL algorithm
+        """
         # STATE
         if self.settings["RL"]["state"] == 'cart':
             self.observation_space_n = 4*self.n_bodies+1
@@ -108,31 +118,20 @@ class Cluster_env(gym.Env):
             
             self.actions *= self.settings['RL']['t_step_param']
 
-        # elif self.settings['RL']['action'] == 'combinations':
-        #     low = self.settings['RL']['range_action'][0]
-        #     high = self.settings['RL']['range_action'][-1]
-        #     n_actions = self.settings['RL']['number_actions']
-        #     actions_1 = np.logspace(np.log10(low), np.log10(high), \
-        #                                num = n_actions, base = 10,
-        #                                endpoint = True)
-        #     low = self.settings['Integration']['t_step_integr'][0]
-        #     high = self.settings['Integration']['t_step_integr'][-1]
-        #     n_actions = self.settings['RL']['number_actions']
-        #     actions_2 = np.logspace(np.log10(low), np.log10(high), \
-        #                                num = n_actions, base = 10,
-        #                                endpoint = True)
-        #     comb = np.meshgrid(actions_1, actions_2)
-        #     self.actions = np.zeros((len(actions_1)* len(actions_2), 2))
-        #     self.actions[:, 0] = comb[0].flatten() # bridge, tstep param
-        #     self.actions[:, 1] = comb[1].flatten()
-
-        
         self.action_space = gym.spaces.Discrete(len(self.actions)) 
 
         # Training parameters
         self.W = self.settings['RL']['weights']
 
     def _initial_conditions_bridge(self):
+        """
+        _initial_conditions_bridge: select initial conditions for the astrophysics system
+        OUTPUTS:
+            stars: particle set with the cluster of stars.
+                Depending on the type of bridge, the common star is included or not
+            planetary_system: particle set for the planetary system. 
+            cluster: all bodies in the cluster and planetary system
+        """
         np.random.seed(seed = self.settings['InitialConditions']['seed'])
 
         #################################
@@ -146,8 +145,6 @@ class Cluster_env(gym.Env):
                                             self.settings['InitialConditions']['ranges_mass'][1] |units.MSun, -2.35)
         Rcluster = self.settings['InitialConditions']['radius_cluster'] | units.pc
         self.converter = nbody_system.nbody_to_si(masses.sum(), Rcluster)
-        #stars=new_plummer_model(N,convert_nbody=converter)
-        print(nbodies)
         stars = new_fractal_cluster_model(nbodies,
                                         fractal_dimension=1.6,
                                         convert_nbody=self.converter,
@@ -161,14 +158,12 @@ class Cluster_env(gym.Env):
 
         #################################
         # Star to get planets
-        # sun = stars.random_sample(1)[0]
         sun = stars[-1]
         sun.name = "Sun"
 
         #################################
         # Planetary system
         inner_radius_disk = self.settings['InitialConditions']['disk_radius'][0] | units.au
-        # outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au/np.sqrt(sun.mass.value_in(units.MSun))
         outer_radius_disk = self.settings['InitialConditions']['disk_radius'][1] | units.au
         mass_disk = self.settings['InitialConditions']['mass_disk'] *sun.mass
         ps = make_planets_oligarch.new_system(sun.mass,
@@ -176,7 +171,6 @@ class Cluster_env(gym.Env):
                                             inner_radius_disk,
                                             outer_radius_disk,
                                             mass_disk)
-        
         planets = ps.planets[0]
         planets.name = "planet"
         planets.type = "planet"
@@ -205,16 +199,10 @@ class Cluster_env(gym.Env):
 
         return stars, planetary_system, cluster
         
-
     ## BASIC FUNCTIONS
     def reset(self):
         """
         reset: reset the simulation 
-        INPUTS:
-            seed: choose the random seed
-            steps: simulation steps to be taken
-            typereward: type or reward to be applied to the problem
-            save_state: save state (True or False)
         OUTPUTS:
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
@@ -226,7 +214,6 @@ class Cluster_env(gym.Env):
         self.units()
 
         # Same time step for the integrators and the bridge
-        # self.all_particles, \
         self.particles_global, self.particles_local, \
         self.particles_joined = self._initial_conditions_bridge()
         self.particles_joined2 = self.particles_joined.copy()
@@ -249,19 +236,16 @@ class Cluster_env(gym.Env):
 
         self.channel = [self.grav_global.particles.new_channel_to(self.particles_joined),\
                         self.grav_local.particles.new_channel_to(self.particles_joined)
-                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
                         ]
         
         self.channel2 = [self.grav_global.particles.new_channel_to(self.particles_joined2),\
                          self.grav_local.particles.new_channel_to(self.particles_joined2)
-                        # self.grav_global.particles.new_channel_to(self.grav_global2.particles),\
                         ]
         
         self.channel_inverse = [self.particles_joined.new_channel_to(self.grav_global.particles),\
                                 self.particles_joined.new_channel_to(self.grav_local.particles)
                         ]
 
-        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
@@ -321,17 +305,18 @@ class Cluster_env(gym.Env):
             counter_max = 4
             error_tol = 0.3
             action_i = action
-            # print(self.grav_local.particles)
             while delta_e_good == False and counter_hybrid < counter_max:
 
                 delta_t0 = self.grav_bridge.time
                 self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
-                delta_t = self.grav_bridge.time - delta_t0 
                 
                 for chan in range(len(self.channel2)):
                     self.channel2[chan].copy()
 
                 # Get information for the reward
+                if self.first_step == True:
+                    self.E_1_total = \
+                    self._get_info(self.particles_joined, initial = True)
                 info_error = self._get_info(self.particles_joined2, save_step = False)
                 if info_error[0][1] == 0:
                     error = np.log10(abs(info_error[0][0]))
@@ -371,8 +356,6 @@ class Cluster_env(gym.Env):
         else:
             t0_step = time.time()
             self.grav_bridge.evolve_model(t, timestep = timestep | self.units_time)
-            # Get information for the reward
-            # info_error = self._get_info(self.particles_joined)
             
         for chan in range(len(self.channel)):
             self.channel[chan].copy()
@@ -387,6 +370,7 @@ class Cluster_env(gym.Env):
 
         info_error = self._get_info(self.particles_joined)
         state = self._get_state(self.particles_joined[0:self.n_stars], info_error[1])
+        
         # Using total energy
         reward = self._calculate_reward(info_error[1], self.info_prev[1], T, self.actions[action], self.W) # Use computation time for this step, including changing integrator
         self.info_prev = info_error
@@ -396,11 +380,9 @@ class Cluster_env(gym.Env):
                             [info_error[0][2], info_error[1]],\
                             T, reward, counter_hybrid) # save initial state
             
-        
         # finish experiment if max number of iterations is reached
         if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
-            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -422,11 +404,17 @@ class Cluster_env(gym.Env):
         return state, reward, terminated, info
     
     def close(self):
+        """
+        close: close integrators
+        """
         self.grav_global.stop()
         self.grav_local.stop()
 
     ## ADDITIONAL FUNCTIONS NEEDED
     def units(self):
+        """
+        units: choose standard units
+        """
         # Choose set of units for the problem
         if self.settings['InitialConditions']['units'] == 'si':
             self.G = constants.G
@@ -479,8 +467,6 @@ class Cluster_env(gym.Env):
             else:
                 g = Hermite()
             g.parameters.dt_param = tstep
-            # Collision detection and softening
-            # g.stopping_conditions.timeout_detection.enable()
             # g.parameters.epsilon_squared = 1e-9 | nbody_system.length**2
         elif integrator_type == 'Ph4': 
             if self.settings['InitialConditions']['units'] == 'si':
@@ -513,7 +499,6 @@ class Cluster_env(gym.Env):
 
         return g 
     
-    # def _get_info(self, particles, energy_loss, initial = False): # change to include multiple energies
     def _get_info(self, particles, initial = False, save_step = True):
         """
         _get_info: get energy error, angular momentum error at current state
@@ -524,28 +509,18 @@ class Cluster_env(gym.Env):
         E_pot = particles.potential_energy(G = self.G).value_in(self.units_energy)
         E_total = E_kin + E_pot
         
-        # L = self.calculate_angular_m(particles)
         if initial == True:
             return E_total
         else:
             Delta_E_rel = (E_total - self.E_0_total)/self.E_0_total
             Delta_E_prev_rel = (self.E_total_prev - self.E_0_total)/self.E_0_total
-            # Delta_E_rel = E_total
-            # print("Errorrs, ",E_total/self.E_0_total, self.E_total_prev/self.E_0_total)
             if save_step == True:
                 self.E_total_prev = E_total
-            # Delta_E_bridge = Delta_E_total - energy_loss
             Delta_E_total = (E_total - self.E_0_total)/self.E_0_total
             Delta_E_rel_firststep = (E_total - self.E_1_total)/self.E_1_total
-            # Delta_E_local = (E_local - self.E_0_local) / self.E_0_local
-            # Delta_L = (L - self.L_0) / self.L_0
-            # return Delta_E_bridge/self.E_0_total, \
-            # return Delta_E_bridge/self.E_0_total, \
-            #       Delta_E_total/self.E_0_total
             return [Delta_E_rel, Delta_E_prev_rel, Delta_E_rel_firststep], \
                   Delta_E_total\
                     
-
     def _get_state(self, particles, E):  # TODO: change to include all particles?
         """
         _get_state: create the state vector
@@ -553,7 +528,11 @@ class Cluster_env(gym.Env):
             - norm: norm of the positions and velocities of each body and the masses
             - cart: 2D cartesian coordinates of the position and angular momentum plus the energy error
             - dis: distance between particles in position and momentum space plus the energy error
+            - potential: potential at the position of the particle and energy error
 
+        INPUTS: 
+            particles: particle set with all bodies
+            E: energy error
         OUTPUTS: 
             state: state array to be given to the reinforcement learning algorithm
         """
@@ -599,11 +578,8 @@ class Cluster_env(gym.Env):
             pot = particles[self.index_planetarystar].potential()
             pot_nbody = self.converter.to_generic(pot).value_in(nbody_system.length**2/nbody_system.time**2)
             
-            # state[0] = min_distance
             state[0] = pot_nbody
-            # state[1] = particles_m_nbody[self.index_planetarystar]
             state[1] = -np.log10(abs(E))
-            # print(state)
 
         return state
     
@@ -654,7 +630,9 @@ class Cluster_env(gym.Env):
             step: simulation step
             particles: particles set
             E: energy error
-            L: angular momentum
+            T: computation time
+            R: reward
+            hybrid_n: number of iterations of the hybrid method
         """
         self.state[step, :, 0] = action
         self.state[step, :, 1] = particles.mass.value_in(self.units_m)
@@ -734,12 +712,7 @@ class Cluster_env(gym.Env):
 
     def reset_withoutBridge(self):
         """
-        reset: reset the simulation 
-        INPUTS:
-            seed: choose the random seed
-            steps: simulation steps to be taken
-            typereward: type or reward to be applied to the problem
-            save_state: save state (True or False)
+        reset_ithoutBridge: reset the simulation for a case with direct integration
         OUTPUTS:
             state_RL: state vector to be passed to the RL
             info_prev: information vector of the previous time step (zero vector)
@@ -751,17 +724,14 @@ class Cluster_env(gym.Env):
         self.units()
 
         # Same time step for the integrators and the bridge
-        # self.all_particles, \
         self.particles_global, self.particles_local, \
         self.particles_joined = self._initial_conditions_bridge()
         
-        # TODO: tstep not implemented for now
         self.grav = self._initialize_integrator(self.settings["Integration"]['t_step_global'], self.settings["Integration"]['integrator_global'])
         self.grav.particles.add_particles(self.particles_joined)
 
         self.channel = self.grav.particles.new_channel_to(self.particles_joined)
 
-        # particles_joined = self._join_particles_bridge([self.particles_global, self.particles_local])
         self.n_bodies_total = len(self.particles_joined)
 
         # Get initial energy and angular momentum. Initialize at 0 for relative error
@@ -808,11 +778,9 @@ class Cluster_env(gym.Env):
         self.iteration += 1
         t0 = self.t_cumul 
         self.t_cumul += self.check_step # add the previous simulation time
-        # self.t_cumul += self.actions[action] # add the previous simulation time
         t = (self.t_cumul) | self.units_time
 
         # Apply action
-        # self.grav_bridge.timestep = self.actions[action] | self.units_time
         # Integrate
         t0_step = time.time()
         self.grav.evolve_model(t)
@@ -820,7 +788,6 @@ class Cluster_env(gym.Env):
         T = time.time() - t0_step
             
         # Get information for the reward
-        # info_error = self._get_info(self.particles_joined, self.grav_bridge.loss_energy.sum())
         if self.first_step == True:
             self.E_1_total = \
             self._get_info(self.particles_joined, initial = True)
@@ -838,7 +805,6 @@ class Cluster_env(gym.Env):
         # finish experiment if max number of iterations is reached
         if (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
               self.iteration == self.settings['Integration']['max_steps']:
-            # (abs(info_error[1]) > self.settings['Integration']['max_error_accepted']) or\
             terminated = True
         else:
             terminated = False
@@ -860,4 +826,7 @@ class Cluster_env(gym.Env):
         return state, reward, terminated, info
     
     def close_withoutBridge(self):
+        """
+        close_withoutBridge: close environment
+        """
         self.grav.stop()

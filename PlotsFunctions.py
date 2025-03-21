@@ -1,8 +1,8 @@
 """
-PlotsSimulation: plotting functions
+PlotsFunctions: plotting functions
 
 Author: Veronica Saz Ulibarrena
-Last modified: 8-February-2024
+Last modified: 5-March-2025
 """
 
 import numpy as np
@@ -19,9 +19,7 @@ colors = ['steelblue', 'darkgoldenrod', 'seagreen', 'coral',  \
         'mediumslateblue', 'deepskyblue', 'blue', 'black', 'red']
 colors2 = ['navy']
 lines = ['-', '--', ':', '-.' ]
-# markers = ['o', 'x', '.', '^', 's']
 markers = ['o', 'o','o','o','o','o','o','o','o','x', 'x','x', '^', 's']
-
 
 def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
                             legend_on = True, axislabel_on = True, marker = 'o', axis = 'xy'):
@@ -71,7 +69,7 @@ def plot_planets_trajectory(ax, state, name_planets, labelsize = 15, steps = 30,
 def plot_planetary_system_trajectory(ax, state, name_planets, labelsize = 15, steps = 30, \
                             legend_on = True, axislabel_on = True, marker = 'o', axis = 'xy'):
     """
-    plot_planets_trajectory: plot trajectory of three bodies
+    plot_planetary_system_trajectory: plot trajectory of the planetary system
     INPUTS:
         ax: matplotlib ax to be plotted in 
         state: array with the state of each of the particles at every step
@@ -224,10 +222,17 @@ def plot_planets_distance(ax, x_axis, state, name_planets, labelsize = 12,
     return Dist
 
 def eliminate_escaped_planets(state, steps):
+    """
+    eliminate_escaped_planets: find unbound planets
+    INPUTS:
+        state: state of the system
+        steps: max number of steps
+    OUTPUTS
+        index_escaped: index of escaped bodies
+    """
     indexes = [2, 3, 4, 5, 6, 7] # for x, y z, vx, vy, vz
 
     # Calculate center of gravity movement to remove it
-    # print(state)
     n_bodies = np.shape(state)[1]
     n_planets = np.count_nonzero(state[0, :, -1]) # not count star
     counter = 0
@@ -246,7 +251,6 @@ def eliminate_escaped_planets(state, steps):
             counter += 1 # count planet index
     
     for j in range(1, n_planets):
-        # for i in range(steps):
         i = -1 # only at the last step required 
         orbital = get_orbital_elements_from_arrays(BODIES[i, j, 0:3] | units.m, \
                                                     BODIES[i, j, 3:6] | units.m/ units.s, \
@@ -268,8 +272,6 @@ def eliminate_escaped_planets(state, steps):
             if counter >0:
                 # with distance to star
                 distance_to_star = np.linalg.norm(BODIES[:, counter, 0:3], axis = 1)
-                # if max(distance_to_star) > 100*distance_to_star[0]:
-                #     index_escaped = 1
                 if max(BODIES[:, counter, 7]) > 0.99: # large eccentricity
                     index_escaped = 1
             counter += 1
@@ -278,18 +280,14 @@ def eliminate_escaped_planets(state, steps):
 
 def calculate_lim_distance_to_one(state, steps):
     """
-    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    calculate_lim_distance_to_one: calculate max distance to center body
     INPUTS:
-        ax: matplotlib ax to be plotted in 
-        x_axis: time or steps to be plotted in the x axis
-        state: array with the state of each of the particles at every step
-        name_planets: array with the names of the bodies
-        labelsize: size of matplotlib labels
-        steps: steps to be plotted
+        state: state of the system
+        steps: max number of steps
+    OUTPUTS
+        index_escaped: index of escaped bodies
     """
-    # steps = np.shape(state)[1]
     Dist = []
-
     index_escaped = 0
     
     star_index = np.where(state[0, :, 8] == 0)[0]
@@ -304,19 +302,16 @@ def calculate_lim_distance_to_one(state, steps):
             index_escaped = 1
 
     return index_escaped
-    
 
 def plot_distance_to_one(ax, x_axis, state, labelsize = 12, 
                          legend = True):
     """
-    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    plot_distance_to_one: plot distance to one body
     INPUTS:
         ax: matplotlib ax to be plotted in 
         x_axis: time or steps to be plotted in the x axis
         state: array with the state of each of the particles at every step
-        name_planets: array with the names of the bodies
         labelsize: size of matplotlib labels
-        steps: steps to be plotted
     """
     steps = len(x_axis)
     Dist = []
@@ -337,21 +332,19 @@ def plot_distance_to_one(ax, x_axis, state, labelsize = 12,
                 color = colors[(star_index[i])%len(colors)])
     if legend == True:
         ax.legend(fontsize =labelsize, framealpha = 0.5)
-    # ax.set_yscale('log')
 
     return Dist
 
 def plot_distance_to_one_tree(ax, x_axis, state, labelsize = 12, 
                          legend = True):
     """
-    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    plot_distance_to_one_tree: plot distance to one in a tree code
     INPUTS:
         ax: matplotlib ax to be plotted in 
         x_axis: time or steps to be plotted in the x axis
         state: array with the state of each of the particles at every step
         name_planets: array with the names of the bodies
         labelsize: size of matplotlib labels
-        steps: steps to be plotted
     """
     steps = len(x_axis)
     Dist = []
@@ -380,21 +373,19 @@ def plot_distance_to_one_tree(ax, x_axis, state, labelsize = 12,
 
     if legend == True:
         ax.legend(fontsize =labelsize, framealpha = 0.5)
-    # ax.set_yscale('log')
 
     return Dist
 
 def plot_diff_state(ax1, ax2,  x_axis, state1, state2, labelsize = 12, 
                          legend = True):
     """
-    plot_planets_distance: plot steps vs pairwise-distance of the bodies
+    plot_diff_state: plot difference in state coords
     INPUTS:
         ax: matplotlib ax to be plotted in 
         x_axis: time or steps to be plotted in the x axis
-        state: array with the state of each of the particles at every step
-        name_planets: array with the names of the bodies
+        state1: array with the state of each of the particles at every step
+        state2: array with the state of each of the particles at every step
         labelsize: size of matplotlib labels
-        steps: steps to be plotted
     """
     steps = len(x_axis)
     Diff_r = []
@@ -455,7 +446,6 @@ def calculate_planet_elements(state, steps):
                                                        BODIES[i, j, 3:6] | units.m/ units.s, \
                                                         M[0] | units.kg, 
                                                         constants.G)
-            
             BODIES[i, j, 6] = orbital[0].value_in(units.au)
             BODIES[i, j, 7] = orbital[1]
             BODIES[i, j, 8] = orbital[2].value_in(units.rad)
@@ -470,7 +460,7 @@ def calculate_planet_elements(state, steps):
 def plot_evolution_keplerian(ax, x_axis, y_axis, label = None, color = None, 
                    colorindex = None, linestyle = None, linewidth = 1, alpha = 1):
     """
-    plot_evolution: plot steps vs another measurement
+    plot_evolution_keplerian: plot steps vs another measurement
     INPUTS:
         ax: matplotlib ax to be plotted in 
         x_axis: time or steps to be plotted in the x axis
@@ -496,6 +486,7 @@ def plot_actions_taken(ax, x_axis, y_axis, action_H= [0],
         ax: matplotlib ax to be plotted in 
         x_axis: time or steps to be plotted in the x axis
         y_axis: data for the y axis
+        action_H: in case of hybrid method, actions
     """
     if color == None:
         colors = colors2[0]
@@ -514,10 +505,7 @@ def plot_actions_taken(ax, x_axis, y_axis, action_H= [0],
         index_flag = np.where(action_H != 0)[0]
         print(index_flag)
         x = x_axis[index_flag]
-        # ax.scatter(x, np.ones(len(x))*9.5, 
-        #         marker = 'x',
-        #         color = colors)
-    
+
         for note in range(len(x)):
             ax.plot([x[note],x[note]], [y_axis[index_flag[note]], 9.5], 
                 # marker = 'x', 

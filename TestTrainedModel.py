@@ -2,28 +2,14 @@
 TestTrainedModelGym_hermite: tests and plots for the RL algorithm
 
 Author: Veronica Saz Ulibarrena
-Last modified: 8-February-2024
+Last modified: 5-March-2025
 """
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-import time
-import json
-import seaborn as sns
-
-import torch
-import torchvision.models as models
-import gym
-
 from env.BridgedCluster_env import Cluster_env
 from TrainRL import train_net
-from Plots_TestTrained import plot_reward, plot_balance, plot_test_reward
+from Plots_TestTrained import plot_test_reward
 from TestEnvironment import run_trajectory, load_state_files, plot_trajs
-from Plots_TestEnvironment import plot_comparison_end, plot_distance_action, \
-    plot_energy_vs_tcomp, plot_energy_vs_tcomp_avg, plot_energy_vs_tcomp_avg_together,\
-    plot_a_vs_e, plot_trajs_tree
-
-
+from Plots_TestEnvironment import plot_energy_vs_tcomp_avg_together, plot_trajs_tree
 
 colors = ['steelblue', 'darkgoldenrod', 'mediumseagreen', 'coral',  \
         'mediumslateblue', 'deepskyblue', 'navy']
@@ -34,14 +20,18 @@ def load_reward(a, suffix = ''):
     load_reward: load rewards from file 
     INPUTS:
         a: environment
+        suffix: file suffix to load
     OUTPUTS:
         score: rewards
         EnergyE: energy error
+        EnergyE_rel: second energy error case
         HuberLoss: huber loss
+        tcomp: computation time
+        testReward: reward for the test cases
+        trainingTime: training time
     """
     score = []
     with open(a.settings['Training']['savemodel'] + suffix + "rewards.txt", "r") as f:
-        # for line in f:
         for y in f.read().split('\n'):
             score_r = list()
             for j in y.split():
@@ -50,7 +40,6 @@ def load_reward(a, suffix = ''):
 
     EnergyE = []
     with open(a.settings['Training']['savemodel'] + suffix + "EnergyError.txt", "r") as f:
-        # for line in f:
         for y in f.read().split('\n'):
             Energy_r = list()
             for j in y.split():
@@ -59,17 +48,14 @@ def load_reward(a, suffix = ''):
 
     EnergyE_rel = []
     with open(a.settings['Training']['savemodel'] + suffix + "EnergyError_rel.txt", "r") as f:
-        # for line in f:
         for y in f.read().split('\n'):
             Energy_rel_r = list()
             for j in y.split():
                 Energy_rel_r.append(float(j))
             EnergyE_rel.append(Energy_rel_r)
 
-
     tcomp = []
     with open(a.settings['Training']['savemodel'] + suffix + "Tcomp.txt", "r") as f:
-        # for line in f:
         for y in f.read().split('\n'):
             tcomp_r = list()
             for j in y.split():
@@ -78,7 +64,6 @@ def load_reward(a, suffix = ''):
 
     testReward = []
     with open(a.settings['Training']['savemodel'] + suffix + "TestReward.txt", "r") as f:
-        # for line in f:
         for y in f.read().split('\n'):
             testreward_r = list()
             for j in y.split():
@@ -97,22 +82,22 @@ def load_reward(a, suffix = ''):
 if __name__ == '__main__':
     experiment = 3 # number of the experiment to be run
 
-    if experiment == 0: # Train
+    if experiment == 0: # Train network
         env = Cluster_env()
         env.settings['Training']['RemovePlanets'] = False # train without planets (they do not contribute to the total energy error)
         env.settings['Integration']['subfolder'] = 'currentTraining/'
+        # Without pretraining
         # train_net(env = env, suffix = "currentTraining/")
 
+        # With pretraining
         model_path = env.settings['Training']['savemodel'] + 'model_weights173.pth'
         train_net(env = env, suffix = "currentTraining/", model_path_pretrained = model_path)
 
-    elif experiment == 1:
+    elif experiment == 1: 
         # Plot training results
         env = Cluster_env()
         reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
                 load_reward(env, suffix = '')
-        # reward, EnergyError, EnergyError_rel, HuberLoss, tcomp, testReward, trainingTime = \
-        #         load_reward(env, suffix = '24_from22_Model173_localTraining/')
         plot_test_reward(env, testReward, trainingTime)
         
     elif experiment == 2:
@@ -184,7 +169,6 @@ if __name__ == '__main__':
         index_to_plot = [0,2,5, 7, 9]
         
         Bodies = [5, 9, 15]
-        # Bodies = [9]
         for i in range(len(Bodies)):
             env.settings['InitialConditions']['n_bodies'] = Bodies[i]
             env.settings['Integration']['subfolder'] = '42_runmodel_Nvary/%ibodies/'%Bodies[i]
@@ -264,8 +248,6 @@ if __name__ == '__main__':
         NAMES = []
         index_to_plot = [0,2,5, 9]
         Bodies = [5, 9, 15]
-        # model_path_index = ''
-        # model_path_index = '173'
         model_path_index = '27'
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
 
@@ -333,9 +315,7 @@ if __name__ == '__main__':
         save_path = env.settings['Integration']['savefile'] + subfolder 
         plot_energy_vs_tcomp_avg_together(env, STATE_list, CONS_list, TCOMP_list, TITLES_list, initializations, save_path, plot_traj_index=index_to_plot, hybrid = hybrid)
 
-
     if experiment == 4: # plot in tcomp vs energy together
-        # subfolder = '6_run_many/model173_40steps/'
         subfolder = '6_run_many/model27/'
         integrators = ['Ph4', 'Huayno']
         radius_cluster = 0.1
@@ -381,7 +361,6 @@ if __name__ == '__main__':
         model_path = './Training_Results/model_weights'+model_path_index +'.pth'
         index_to_plot = [0,2,5, 7, 9]
         
-        # Bodies = [9]
         NAMES = []
         TITLES = []
 
@@ -404,7 +383,6 @@ if __name__ == '__main__':
             traj_index = 'RLbest'
 
         # Fixed-step
-        # index_to_plot = [0]
         for a_i, act in enumerate(index_to_plot): # index_toplot includes RL
             action = act
             NAMES.append('_action_%0.3E_seed%i'%(env.actions[action], seed))
